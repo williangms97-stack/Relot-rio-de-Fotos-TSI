@@ -8,15 +8,17 @@
 
    Ao publicar uma nova versão, altere VERSAO para forçar a renovação completa.
    ========================================================================== */
-const VERSAO = 'tsi-dois-marcos-1.0.0';
+const VERSAO = 'tsi-dois-marcos-1.1.0';
 
 const ARQUIVOS = [
   './',
   './index.html',
+  './painel.html',
   './manifest.webmanifest',
   './css/fontes.css',
   './css/estilos.css',
   './js/core/config.js',
+  './js/core/servidor.js',
   './js/core/util.js',
   './js/core/recursos.js',
   './js/core/db.js',
@@ -33,6 +35,8 @@ const ARQUIVOS = [
   './js/servicos/arquivos.js',
   './js/servicos/pdf.js',
   './js/servicos/pdf-fontes.js',
+  './js/servicos/nuvem.js',
+  './vendor/supabase.js',
   './js/ui/base.js',
   './js/ui/graficos.js',
   './js/ui/login.js',

@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="css/fontes.css">
   <link rel="stylesheet" href="css/estilos.css">
 </head>
-<body data-interface="acesso">
+<body data-interface="acesso" data-entrada="app">
   <div id="app">
     <div class="abertura">
       <img src="assets/logo-dois-marcos.png" alt="Dois Marcos Sementes" width="751" height="208">
@@ -29,6 +29,7 @@
 
   <!-- Núcleo: configuração, utilitários, logomarca embutida e banco local -->
   <script defer src="js/core/config.js"></script>
+  <script defer src="js/core/servidor.js"></script>
   <script defer src="js/core/util.js"></script>
   <script defer src="js/core/recursos.js"></script>
   <script defer src="js/core/db.js"></script>
@@ -46,6 +47,10 @@
   <script defer src="js/servicos/imagem.js"></script>
   <script defer src="js/servicos/arquivos.js"></script>
   <script defer src="js/servicos/pdf.js"></script>
+
+  <!-- Servidor central (Supabase): ativo quando js/core/servidor.js está preenchido -->
+  <script defer src="vendor/supabase.js"></script>
+  <script defer src="js/servicos/nuvem.js"></script>
 
   <!-- Interface -->
   <script defer src="js/ui/base.js"></script>

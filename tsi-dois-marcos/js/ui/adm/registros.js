@@ -116,7 +116,7 @@
 
       el.addEventListener('click', (ev) => {
         const b = ev.target.closest('[data-acao]');
-        if (b && b.dataset.acao === 'atualizar') { ui.ocupar(b, carregar); return; }
+        if (b && b.dataset.acao === 'atualizar') { ui.ocupar(b, () => (TSI.nuvem && TSI.nuvem.ativa ? TSI.nuvem.sincronia.puxar() : Promise.resolve()).then(carregar)); return; }
         if (b && b.dataset.acao === 'pagina') { pagina = Number(b.dataset.pagina); desenharLista(); return; }
         const linha = ev.target.closest('tr[data-id]');
         if (linha) abrir(linha);

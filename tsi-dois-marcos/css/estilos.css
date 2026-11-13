@@ -549,6 +549,7 @@ s { color: var(--tinta-3); }
 .login-demo .btn { color: var(--amarelo-500); }
 @media (hover: hover) { .login-demo .btn:hover { background: rgba(255, 255, 255, 0.14); } }
 .login-rodape { text-align: center; font-size: 12.5px; color: rgba(255, 255, 255, 0.78); }
+.login-rodape a { color: #fff; font-size: 14px; font-weight: 600; }
 .login :focus-visible { outline-color: var(--amarelo-500); }
 .login-cartao :focus-visible { outline-color: var(--foco); }
 

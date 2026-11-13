@@ -234,7 +234,7 @@
         const b = ev.target.closest('[data-acao]');
         if (!b) return;
         const acao = b.dataset.acao;
-        if (acao === 'atualizar') ui.ocupar(b, carregar);
+        if (acao === 'atualizar') ui.ocupar(b, () => (TSI.nuvem && TSI.nuvem.ativa ? TSI.nuvem.sincronia.puxar() : Promise.resolve()).then(carregar));
         else if (acao === 'ir-importacao') ctx.navegar('importacao');
         else if (acao === 'ver-pendentes') { ev.preventDefault(); ctx.navegar('ordens', { situacao: SIT.PENDENTE }); }
         else if (acao === 'limpar-filtros') {

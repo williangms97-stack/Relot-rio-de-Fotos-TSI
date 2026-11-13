@@ -3,10 +3,15 @@
 Protótipo funcional (etapa 1) para registrar, guardar, consultar e gerar relatórios fotográficos
 do Tratamento Industrial de Sementes (TSI).
 
-- **App do operador (celular):** pesquisa a ordem de TSI, confere os dados do RQ70, informa a
+| Interface | Endereço (GitHub Pages) |
+|---|---|
+| Aplicativo (celular) | https://williangms97-stack.github.io/Relot-rio-de-Fotos-TSI/tsi-dois-marcos/ |
+| Painel (computador) | https://williangms97-stack.github.io/Relot-rio-de-Fotos-TSI/tsi-dois-marcos/painel.html |
+
+- **App do operador (celular), `index.html`:** pesquisa a ordem de TSI, confere os dados do RQ70, informa a
   quantidade tratada (com justificativa quando difere da prevista), seleciona a máquina, fotografa a
   amostra e envia. Gera protocolo e PDF.
-- **Painel do administrador (desktop):** importa a planilha RQ70, acompanha registros e pendências,
+- **Painel do administrador (desktop), `painel.html`:** importa a planilha RQ70, acompanha registros e pendências,
   cancela/desconsidera ordens, corrige e anula registros com auditoria, cadastra máquinas e usuários
   e gera o PDF "Inspeção de Sementes Tratadas" de cada ordem.
 
@@ -16,7 +21,7 @@ Feito em HTML, CSS e JavaScript puros, sem etapa de compilação.
 
 | Forma | Para quê | Como |
 |---|---|---|
-| Duplo clique em `index.html` | Teste rápido no computador (Chrome ou Edge) | Abra o arquivo. Tudo funciona, exceto instalação como app e uso offline |
+| Duplo clique em `painel.html` ou `index.html` | Teste rápido no computador (Chrome ou Edge) | Abra o arquivo. Tudo funciona, exceto instalação como app e uso offline |
 | Servidor local | Desenvolvimento | Na pasta do projeto: `npx serve` ou `python -m http.server 8080` e abra `http://localhost:8080` |
 | Hospedagem com HTTPS | Uso no celular, instalação na tela inicial e funcionamento sem internet | Publique a pasta inteira em qualquer hospedagem de arquivos estáticos (servidor interno, Netlify, Vercel, GitHub Pages, Supabase Storage etc.) |
 
@@ -35,11 +40,11 @@ fábrica estiverem ativas, a tela de acesso mostra um quadro lembrando disso.
 
 ## Roteiro de demonstração
 
-1. Entre como **Administrador** e abra **Importar RQ70**. Informe a cultura (ex.: Soja) e selecione a
+1. Abra o **painel** (`painel.html`), entre como administrador e abra **Importar RQ70**. Informe a cultura (ex.: Soja) e selecione a
    planilha. Confira a pré-visualização e confirme.
 2. Em **Ordens**, filtre "Solicitada até" a data de implantação, selecione todas as do filtro e use
    **Desconsiderar** — assim a cobertura fotográfica passa a medir só as ordens que devem ter foto.
-3. Clique em **App do operador** (ou entre com o usuário operador no celular). Digite uma ordem
+3. Clique em **Aplicativo do celular** (ou abra `index.html` no celular e entre com o usuário operador). Digite uma ordem
    pendente, siga as cinco etapas e envie.
 4. Volte ao painel: o registro aparece em **Registros** e no **Painel**. Abra o registro e clique em
    **GERAR PDF**.
@@ -90,7 +95,8 @@ ligar um serviço de visão computacional depois.
 ## Estrutura do projeto
 
 ```
-index.html                 página única (login, app do operador e painel)
+index.html                 aplicativo do operador (celular)
+painel.html                painel do administrador (computador)
 manifest.webmanifest       instalação como app (PWA)
 sw.js                      funcionamento sem internet
 css/                       estilos e fontes locais
@@ -119,8 +125,9 @@ espelha a distribuição oficial. Para conferir ou atualizar, o arquivo oficial 
 `https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js` (basta substituir
 `vendor/xlsx.full.min.js`).
 
-## Próxima etapa
+## Servidor central (Supabase)
 
-Ligar o **Supabase** como banco central: tabelas, armazenamento das fotografias, login real e envio
-automático da fila, para que os registros dos celulares apareçam no painel. O caminho está descrito em
-`docs/ARQUITETURA.md`.
+A partir da versão 1.1 o sistema pode usar o Supabase como banco central: os registros dos celulares
+aparecem no painel, o login passa a ser conferido no servidor e as fotos ficam no Storage. Para ligar,
+siga `supabase/LEIA-ME.md` (na raiz do repositório) e preencha `js/core/servidor.js`. Com esse arquivo
+em branco, o sistema continua funcionando só com os dados do aparelho, como descrito acima.

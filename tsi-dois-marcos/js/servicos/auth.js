@@ -47,7 +47,9 @@
         if (!u || auth.hashSenha(senha, u.sal) !== u.senhaHash) throw Erro('Usuário ou senha incorretos.');
         if (!u.ativo) throw Erro('Este usuário está inativo. Procure o administrador.');
         if (perfilEscolhido === PERFIS.ADM && u.perfil !== PERFIS.ADM) {
-          throw Erro('Este usuário não tem perfil de Administrador. Selecione "Operador".');
+          var semAdm = Erro('Este usuário não tem perfil de Administrador.');
+          semAdm.codigo = 'SEM_PERFIL_ADM';
+          throw semAdm;
         }
         usuarioAtual = publico(u);
         modoAtual = perfilEscolhido === PERFIS.ADM ? PERFIS.ADM : PERFIS.OPERADOR;
@@ -70,6 +72,16 @@
     },
 
     sair: function () { usuarioAtual = null; modoAtual = null; gravarSessao(null); },
+
+    /* Usados quando o acesso é conferido por um servidor (ver servicos/nuvem.js) */
+    assumir: function (u, modo) {
+      usuarioAtual = publico(u);
+      modoAtual = modo === PERFIS.ADM && u.perfil === PERFIS.ADM ? PERFIS.ADM : PERFIS.OPERADOR;
+      var s = lerSessao();
+      gravarSessao({ usuarioId: u.id, modo: modoAtual, entrouEm: (s && s.usuarioId === u.id && s.entrouEm) || util.agora() });
+      return usuarioAtual;
+    },
+    sessaoGravada: lerSessao,
 
     usuario: function () { return usuarioAtual; },
     modo: function () { return modoAtual; },

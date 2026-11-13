@@ -73,40 +73,41 @@ relatório daquele registro não muda.
 
 As permissões são conferidas nos serviços (`TSI.auth.exigirAdm()`), não só escondidas na tela.
 
-## Ligação com o Supabase (próxima etapa)
+## Servidor central (Supabase)
 
-O desenho recomendado mantém o app do operador funcionando sem internet:
+Ligado quando `js/core/servidor.js` tem URL e chave pública. Instalação: `supabase/LEIA-ME.md`
+(na raiz do repositório). Em branco, o sistema funciona só com os dados do aparelho.
 
-1. **Celular grava primeiro no aparelho** (como hoje) e coloca o registro na fila.
-2. **A fila envia ao Supabase** quando há conexão. Basta registrar um adaptador:
+`js/servicos/nuvem.js` substitui, na inicialização, as peças que dependem de onde os dados estão,
+sem mudar telas nem regras:
 
-   ```js
-   TSI.sincronizacao.registrarAdaptador({
-     enviarRegistro: async function (registro, fotos, item) {
-       // 1. envia as fotos ao Storage  2. grava o registro e os eventos nas tabelas
-     }
-   });
-   ```
+| Peça | Sem servidor | Com Supabase |
+|---|---|---|
+| `TSI.repo` | IndexedDB | Lê do IndexedDB (cópia local); `lote()` do ADM vai antes ao servidor (`tsi_lote`) |
+| `TSI.auth` | usuário e senha no navegador | Supabase Auth (`usuario` → `usuario@DOMINIO_LOGIN`) + perfil em `tsi_perfis` |
+| `TSI.usuarios` | coleção local | Edge Function `tsi-usuarios` (criar, editar, senha, situação) |
+| Fila de envio | sem adaptador (aguardando) | fotos para o Storage + `tsi_criar_registro` |
+| Fotos de outros aparelhos | — | baixadas do Storage quando abertas (detalhe, PDF) e guardadas |
 
-   A fila já trata tentativas, marca "Sincronizado" ou "Falha no envio" e reprocessa quando a conexão
-   volta.
-3. **Painel e celulares leem do Supabase** as ordens, máquinas, usuários e registros dos outros
-   aparelhos. Para o painel, que trabalha sempre conectado, o caminho mais simples é um
-   `RepositorioSupabase` com o mesmo contrato acima atribuído a `TSI.repo`.
+Sincronização: `tsi_puxar` devolve, por coleção, o que mudou depois de um ponto (data de atualização
++ id, em páginas de 500). O aparelho guarda o ponto por coleção e revisita os 2 minutos anteriores
+para pegar gravações que terminaram fora de ordem. Roda ao entrar, ao voltar a conexão, ao voltar à
+aba e a cada `INTERVALO_SINCRONIA` segundos. Operador não baixa histórico nem importações, recebe só
+as próprias fotos e a miniatura só dos próprios registros.
 
-Mapa sugerido:
+No servidor, cada tabela guarda o documento do sistema em `dados` (jsonb) com colunas geradas para
+chaves e índices (`tsi_registros.chave_ordem_ativa` é única). O navegador não tem acesso direto às
+tabelas: só às funções `tsi_*` (security definer), que conferem perfil e situação. Histórico não pode
+ser alterado nem apagado; registros não podem ser apagados (anulação é uma alteração).
 
-| Hoje (IndexedDB) | Supabase |
-|---|---|
-| Coleções acima | Tabelas Postgres com os mesmos campos (dados da ordem dentro do registro em `jsonb`) |
-| Índice único `chaveOrdemAtiva` | Índice único parcial: `unique (ordem_tsi) where anulado_em is null` |
-| `fotos.dados` | Arquivo no Storage (bucket privado); a tabela guarda o caminho e os metadados |
-| `repo.lote` | Função SQL (RPC) executada em uma transação |
-| Acesso demonstrativo | Supabase Auth + tabela de perfis; regras RLS por perfil |
-| Eventos `registros:alterado` | Realtime do Supabase publicando no mesmo barramento `TSI.eventos` |
+Conflito: se dois aparelhos registram a mesma ordem sem internet, o servidor aceita o primeiro;
+o outro fica como "Falha no envio" no aparelho, com `chaveOrdemAtiva = conflito:<id>`, e não é
+reenviado. Registro feito por outro usuário no mesmo aparelho espera esse usuário entrar de novo.
 
-Os cadastros iniciais têm identificadores fixos (`maquina-linha-01`, `usuario-admin`…) para serem
-reconhecidos como os mesmos em todos os aparelhos.
+Testes: a etapa foi testada com a biblioteca supabase-js real contra um servidor que simula Auth,
+PostgREST, Storage e Edge Functions sobre Postgres (PGlite) com o mesmo `01_estrutura.sql`:
+dois aparelhos, importação, registro com foto, painel, PDF, correção, offline, conflito,
+cancelamento e desativação de usuário.
 
 ## Visão computacional (futuro)
 

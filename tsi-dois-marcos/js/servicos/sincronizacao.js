@@ -17,7 +17,9 @@
 (function (global) {
   'use strict';
   var TSI = global.TSI;
-  var util = TSI.util, cfg = TSI.config, repo = function () { return TSI.repo; };
+  var util = TSI.util, cfg = TSI.config;
+  // a fila é sempre do aparelho: com servidor central, TSI.repo.local é o banco local
+  var repo = function () { return TSI.repo.local || TSI.repo; };
   var ENVIO = cfg.SITUACAO_ENVIO;
   var adaptador = null;
   var emAndamento = null;
@@ -60,10 +62,14 @@
             return Promise.all([repo().registros.obter(item.registroId), TSI.registros.fotosDe(item.registroId)]).then(function (r) {
               var reg = r[0];
               if (!reg) return null;
+              // registro feito por outro usuário neste aparelho: espera ele entrar de novo
+              if (adaptador.podeEnviar && !adaptador.podeEnviar(item, reg)) return null;
               return Promise.resolve().then(function () { return adaptador.enviarRegistro(reg, r[1], item); }).then(function () {
                 item.situacao = ENVIO.SINCRONIZADO; item.erro = null; enviados++;
+                reg.erroEnvio = null;
               }, function (e) {
                 item.situacao = ENVIO.FALHA; item.erro = (e && e.message) || 'Falha no envio'; falhas++;
+                reg.erroEnvio = item.erro;
               }).then(function () {
                 item.tentativas++; item.ultimaTentativa = util.agora();
                 return repo().filaSincronizacao.porIndice('registroId', reg.id).then(function (doRegistro) {

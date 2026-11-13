@@ -27,26 +27,56 @@
   }
 
   /** Mostra a interface que corresponde à sessão atual. */
+  /* Endereço de entrada, definido em <body data-entrada="...">:
+       'app'    → index.html, aplicativo do operador (celular)
+       'painel' → painel.html, painel do administrador (desktop)
+       ausente  → página única que escolhe o perfil na tela de acesso */
+  const entrada = () => document.body.getAttribute('data-entrada') || '';
+  const ENDERECO = { app: 'index.html', painel: 'painel.html' };
+
+  function irPara(destino, modo) {
+    TSI.auth.definirModo(modo);
+    if (entrada() && entrada() !== destino) global.location.href = ENDERECO[destino];
+    else rotear();
+  }
+
   function rotear() {
     if (!TSI.auth.usuario()) {
       document.body.dataset.interface = 'acesso';
-      trocar((r) => TSI.telas.login.montar(r, rotear));
+      trocar((r) => TSI.telas.login.montar(r, rotear, entrada()));
       return;
     }
-    if (TSI.auth.modo() === PERFIS.ADM && TSI.auth.ehAdm()) {
+    const painel = entrada() === 'painel' || (!entrada() && TSI.auth.modo() === PERFIS.ADM);
+    if (painel && !TSI.auth.ehAdm()) {   // operador abriu o endereço do painel
+      TSI.auth.sair();
+      rotear();
+      ui.aviso('O painel é exclusivo do administrador. Use o aplicativo do celular.', 'erro');
+      return;
+    }
+    if (painel) {
+      TSI.auth.definirModo(PERFIS.ADM);
       document.body.dataset.interface = 'painel';
       trocar((r) => TSI.telas.adm.estrutura.montar(r, {
         aoSair: sair,
-        aoAbrirOperador: () => { TSI.auth.definirModo(PERFIS.OPERADOR); rotear(); }
+        aoAbrirOperador: () => irPara('app', PERFIS.OPERADOR)
       }));
     } else {
+      if (entrada() === 'app') TSI.auth.definirModo(PERFIS.OPERADOR);
       document.body.dataset.interface = 'operador';
       trocar((r) => TSI.telas.operador.montar(r, {
         aoSair: sair,
-        aoIrParaPainel: () => { TSI.auth.definirModo(PERFIS.ADM); rotear(); }
+        aoIrParaPainel: () => irPara('painel', PERFIS.ADM)
       }));
     }
   }
+
+  // usuário desativado ou sessão perdida no servidor
+  TSI.eventos.ouvir('sessao:encerrada', (d) => {
+    if (!TSI.auth.usuario()) return;
+    TSI.auth.sair();
+    rotear();
+    ui.aviso((d && d.motivo) || 'Sua sessão foi encerrada. Entre novamente.', 'erro', 8000);
+  });
 
   function erroFatal(e) {
     console.error(e);

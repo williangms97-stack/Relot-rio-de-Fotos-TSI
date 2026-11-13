@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Painel TSI Dois Marcos</title>
+  <meta name="description" content="Painel do administrador — Relatório fotográfico de TSI, Dois Marcos Sementes">
+  <meta name="theme-color" content="#026548">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="icon" type="image/png" sizes="48x48" href="assets/icones/favicon-48.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icones/icone-192.png">
+  <link rel="apple-touch-icon" href="assets/icones/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/fontes.css">
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body data-interface="acesso" data-entrada="painel">
+  <div id="app">
+    <div class="abertura">
+      <img src="assets/logo-dois-marcos.png" alt="Dois Marcos Sementes" width="751" height="208">
+      <p>Abrindo o sistema…</p>
+      <noscript><p>Este sistema precisa do JavaScript ativado no navegador.</p></noscript>
+    </div>
+  </div>
+
+  <!-- Núcleo: configuração, utilitários, logomarca embutida e banco local -->
+  <script defer src="js/core/config.js"></script>
+  <script defer src="js/core/servidor.js"></script>
+  <script defer src="js/core/util.js"></script>
+  <script defer src="js/core/recursos.js"></script>
+  <script defer src="js/core/db.js"></script>
+  <script defer src="js/core/repositorio.js"></script>
+
+  <!-- Regras de negócio -->
+  <script defer src="js/servicos/historico.js"></script>
+  <script defer src="js/servicos/auth.js"></script>
+  <script defer src="js/servicos/usuarios.js"></script>
+  <script defer src="js/servicos/maquinas.js"></script>
+  <script defer src="js/servicos/ordens.js"></script>
+  <script defer src="js/servicos/sincronizacao.js"></script>
+  <script defer src="js/servicos/registros.js"></script>
+  <script defer src="js/servicos/importacao.js"></script>
+  <script defer src="js/servicos/imagem.js"></script>
+  <script defer src="js/servicos/arquivos.js"></script>
+  <script defer src="js/servicos/pdf.js"></script>
+
+  <!-- Servidor central (Supabase): ativo quando js/core/servidor.js está preenchido -->
+  <script defer src="vendor/supabase.js"></script>
+  <script defer src="js/servicos/nuvem.js"></script>
+
+  <!-- Interface -->
+  <script defer src="js/ui/base.js"></script>
+  <script defer src="js/ui/graficos.js"></script>
+  <script defer src="js/ui/login.js"></script>
+  <script defer src="js/ui/operador.js"></script>
+  <script defer src="js/ui/adm/comum.js"></script>
+  <script defer src="js/ui/adm/estrutura.js"></script>
+  <script defer src="js/ui/adm/painel.js"></script>
+  <script defer src="js/ui/adm/registros.js"></script>
+  <script defer src="js/ui/adm/ordens.js"></script>
+  <script defer src="js/ui/adm/importacao.js"></script>
+  <script defer src="js/ui/adm/maquinas.js"></script>
+  <script defer src="js/ui/adm/usuarios.js"></script>
+  <script defer src="js/ui/adm/historico.js"></script>
+  <script defer src="js/app.js"></script>
+
+  <!-- SheetJS (vendor/xlsx.full.min.js) e jsPDF (vendor/jspdf.umd.min.js) são carregados
+       sob demanda: ver BIBLIOTECAS em js/core/config.js -->
+</body>
+</html>

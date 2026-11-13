@@ -207,7 +207,9 @@
               : ui.vazio('camera', 'Nenhum registro enviado', 'Pesquise uma ordem de tratamento para fazer o primeiro registro fotográfico.')}
           </section>
 
-          <p class="op-nota">${icone('banco', 16)}<span>Os registros ficam guardados neste aparelho como “Aguardando envio”. O envio ao servidor central será ativado na próxima etapa do projeto.</span></p>`;
+          ${TSI.nuvem && TSI.nuvem.ativa
+            ? html`<p class="op-nota">${icone('nuvem', 16)}<span>Os registros ficam guardados neste aparelho e são enviados ao servidor assim que houver internet.</span></p>`
+            : html`<p class="op-nota">${icone('banco', 16)}<span>Os registros ficam guardados neste aparelho como “Aguardando envio”. O envio ao servidor central será ativado na próxima etapa do projeto.</span></p>`}`;
       }
 
       function resultadoBusca() {
@@ -543,6 +545,8 @@
       function telaDetalhe() {
         const r = E.detalhe.registro, fotos = E.detalhe.fotos;
         return html`
+          ${r.erroEnvio && r.situacaoEnvio === 'falha' ? html`<div class="alerta alerta-erro">${icone('nuvemErro', 20)}<div><strong>Este registro não foi enviado ao servidor</strong>
+            <p>${r.erroEnvio}</p><p>As fotografias continuam guardadas neste aparelho. Avise o administrador.</p></div></div>` : ''}
           ${r.anulado ? html`<div class="alerta alerta-erro">${icone('anular', 20)}<div><strong>Registro anulado pelo administrador</strong>
             <p>${util.fmtDataHora(r.anulado.em)} · ${r.anulado.porNome} · ${r.anulado.motivo}</p></div></div>` : ''}
           <section class="cartao">
@@ -567,7 +571,7 @@
             <div class="op-menu">
               <p class="texto-menor">${cfg.ROTULO_PERFIL[usuario.perfil]} · usuário ${usuario.usuario}</p>
               <button type="button" class="btn btn-secundario btn-g btn-bloco" data-menu="meus">${icone('camera', 22)}<span>Meus registros</span></button>
-              ${TSI.auth.ehAdm() ? html`<button type="button" class="btn btn-secundario btn-g btn-bloco" data-menu="painel">${icone('painel', 22)}<span>Ir para o painel</span></button>` : ''}
+              ${TSI.auth.ehAdm() ? html`<button type="button" class="btn btn-secundario btn-g btn-bloco" data-menu="painel">${icone('painel', 22)}<span>Abrir o painel</span></button>` : ''}
               <button type="button" class="btn btn-fantasma btn-g btn-bloco" data-menu="sair">${icone('sair', 22)}<span>Sair</span></button>
             </div>`
         });
@@ -693,6 +697,9 @@
       desligarEventos.push(TSI.eventos.ouvir('conexao:alterada', () => {
         const el = raiz.querySelector('#op-offline');
         if (el) el.hidden = TSI.sincronizacao.online();
+      }));
+      desligarEventos.push(TSI.eventos.ouvir('ordens:alterado', () => {
+        if (E.tela === 'inicio') carregarInicio().then(() => { if (E.tela === 'inicio') desenhar(); });
       }));
       desligarEventos.push(TSI.eventos.ouvir('registros:alterado', () => {
         if (E.tela === 'inicio' || E.tela === 'meus') carregarInicio().then(() => { if (E.tela === 'inicio' || E.tela === 'meus') desenhar(); });

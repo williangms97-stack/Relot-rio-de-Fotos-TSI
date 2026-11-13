@@ -113,7 +113,7 @@
                 </table>
               </div>
             </div>
-            <p class="texto-menor">Cada registro guarda automaticamente o usuário, o nome do operador, a data e o horário. O acesso desta versão é demonstrativo e será substituído por autenticação no servidor.</p>`;
+            <p class="texto-menor">Cada registro guarda automaticamente o usuário, o nome do operador, a data e o horário. ${TSI.nuvem && TSI.nuvem.ativa ? 'O acesso é conferido pelo servidor central; para entrar, use o nome de usuário e a senha.' : 'O acesso desta versão é demonstrativo e será substituído por autenticação no servidor.'}</p>`;
         }).catch(ui.erro);
       }
 

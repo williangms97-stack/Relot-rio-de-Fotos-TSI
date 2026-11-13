@@ -27,11 +27,15 @@
     Promise.all([TSI.sincronizacao.resumo(), TSI.sincronizacao.fila(), estimativa, persistente]).then((r) => {
       const res = r[0], fila = r[1].slice().reverse(), est = r[2], pers = r[3];
       m.definirConteudo(html`
-        <div class="alerta alerta-info">${icone('banco', 20)}
+        ${TSI.nuvem && TSI.nuvem.ativa
+          ? html`<div class="alerta alerta-ok">${icone('nuvemOk', 20)}<div><strong>Conectado ao servidor central (Supabase).</strong>
+              <p>Os registros feitos nos celulares chegam aqui automaticamente. Cada aparelho guarda uma cópia dos dados para funcionar sem internet
+              e envia o que fez assim que a conexão volta.${TSI.nuvem.sincronia.ultima() ? ' Última atualização: ' + util.fmtDataHora(TSI.nuvem.sincronia.ultima(), true) + '.' : ''}</p></div></div>`
+          : html`<div class="alerta alerta-info">${icone('banco', 20)}
           <div><strong>Os dados estão guardados somente neste aparelho.</strong>
           <p>Nesta versão não existe servidor central: ordens, registros e fotografias ficam no banco local deste navegador e não são compartilhados com outros aparelhos.
           Por isso os registros permanecem como “Aguardando envio” até a integração com o banco de dados central.</p></div>
-        </div>
+        </div>`}
         <div class="resumo-linha">
           <div><span>Aguardando envio</span><strong>${util.fmtNum(res.aguardando, 0)}</strong></div>
           <div><span>Sincronizados</span><strong>${util.fmtNum(res.sincronizado, 0)}</strong></div>
@@ -39,7 +43,7 @@
           <div><span>Espaço usado neste navegador</span><strong>${est && est.usage ? util.fmtBytes(est.usage) : '—'}</strong></div>
         </div>
         <p class="texto-menor">
-          Servidor central: ${TSI.sincronizacao.configurada() ? 'configurado' : 'não configurado nesta versão'} ·
+          Servidor central: ${TSI.sincronizacao.configurada() ? 'conectado' : 'não configurado nesta versão'} ·
           Conexão: ${TSI.sincronizacao.online() ? 'disponível' : 'sem conexão'} ·
           Armazenamento persistente: ${pers === true ? 'concedido pelo navegador' : pers === false ? 'não concedido (o navegador pode liberar espaço se o disco encher)' : 'não informado pelo navegador'}
         </p>
@@ -76,7 +80,7 @@
             <div class="adm-menu-rodape">
               <button type="button" class="adm-menu-botao" data-acao="sincronizacao">${icone('banco', 20)}
                 <span><strong>Dados neste aparelho</strong><small id="adm-fila">Carregando…</small></span></button>
-              <button type="button" class="adm-menu-botao" data-acao="app-operador">${icone('celular', 20)}<span><strong>App do operador</strong><small>Fazer um registro</small></span></button>
+              <button type="button" class="adm-menu-botao" data-acao="app-operador">${icone('celular', 20)}<span><strong>Aplicativo do celular</strong><small>Fazer um registro</small></span></button>
               <div class="adm-usuario">
                 <span class="avatar">${util.iniciais(usuario.nome)}</span>
                 <span class="adm-usuario-nome"><strong>${usuario.nome}</strong><small>${cfg.ROTULO_PERFIL[usuario.perfil]}</small></span>

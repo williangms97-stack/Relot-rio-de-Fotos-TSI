@@ -22,8 +22,11 @@
   }
 
   TSI.telas.login = {
-    montar(raiz, aoEntrar) {
-      const perfil = perfilInicial();
+    /* entrada: 'app' (index.html), 'painel' (painel.html) ou '' (escolha do perfil na tela) */
+    montar(raiz, aoEntrar, entrada) {
+      const fixo = entrada === 'app' ? 'OPERADOR' : entrada === 'painel' ? 'ADM' : null;
+      const perfil = fixo || perfilInicial();
+      const titulo = fixo === 'OPERADOR' ? 'Aplicativo do operador' : fixo === 'ADM' ? 'Painel do administrador' : 'Acesso ao sistema';
       raiz.innerHTML = html`
         <main class="login">
           <div class="login-coluna">
@@ -33,15 +36,16 @@
             </div>
 
             <form class="login-cartao" id="form-login" novalidate>
-              <h1>Acesso ao sistema</h1>
-              <fieldset class="segmentado">
+              <h1>${titulo}</h1>
+              ${fixo ? html`<input type="hidden" name="perfil" value="${fixo}">` : ''}
+              <fieldset class="segmentado" ${fixo ? ui.bruto('hidden disabled') : ''}>
                 <legend>Perfil de acesso</legend>
                 <label>
-                  <input type="radio" name="perfil" id="login-perfil-operador" value="OPERADOR" ${perfil === 'OPERADOR' ? ui.bruto('checked') : ''}>
+                  <input type="radio" name="perfil" id="login-perfil-operador" value="OPERADOR" ${!fixo && perfil === 'OPERADOR' ? ui.bruto('checked') : ''}>
                   <span>${icone('celular', 18)}Operador</span>
                 </label>
                 <label>
-                  <input type="radio" name="perfil" id="login-perfil-adm" value="ADM" ${perfil === 'ADM' ? ui.bruto('checked') : ''}>
+                  <input type="radio" name="perfil" id="login-perfil-adm" value="ADM" ${!fixo && perfil === 'ADM' ? ui.bruto('checked') : ''}>
                   <span>${icone('painel', 18)}Administrador</span>
                 </label>
               </fieldset>
@@ -63,14 +67,15 @@
             </form>
 
             <div class="login-demo" id="login-demo" hidden></div>
-            <p class="login-rodape">Versão ${cfg.VERSAO} · Acesso demonstrativo · Dados guardados neste aparelho</p>
+            ${fixo === 'ADM' ? html`<p class="login-rodape"><a href="index.html">Abrir o aplicativo do celular</a></p>` : ''}
+            <p class="login-rodape">Versão ${cfg.VERSAO} · ${TSI.nuvem && TSI.nuvem.ativa ? 'Conectado ao servidor central' : 'Acesso demonstrativo · Dados guardados neste aparelho'}</p>
           </div>
         </main>`;
 
       const form = raiz.querySelector('#form-login');
       const erro = raiz.querySelector('#login-erro');
       const senha = raiz.querySelector('#login-senha');
-      const perfilAtual = () => form.querySelector('input[name=perfil]:checked').value;
+      const perfilAtual = () => fixo || form.querySelector('input[name=perfil]:checked').value;
 
       form.addEventListener('change', (ev) => {
         if (ev.target.name !== 'perfil') return;
@@ -91,10 +96,11 @@
         erro.hidden = true;
         const botao = raiz.querySelector('#login-entrar');
         ui.ocupar(botao, () => TSI.auth.entrar(form.usuario.value, senha.value, perfilAtual()).then(() => {
-          try { global.localStorage.setItem(CHAVE_PERFIL, perfilAtual()); } catch (e) { /* sem armazenamento */ }
+          if (!fixo) { try { global.localStorage.setItem(CHAVE_PERFIL, perfilAtual()); } catch (e) { /* sem armazenamento */ } }
           aoEntrar();
         })).catch((e) => {
-          erro.textContent = ui.mensagemDe(e);
+          erro.textContent = ui.mensagemDe(e) + (e && e.codigo === 'SEM_PERFIL_ADM'
+            ? (fixo ? ' Use o aplicativo do celular.' : ' Selecione "Operador".') : '');
           erro.hidden = false;
           if (!e || !e.amigavel) console.error(e);
           senha.select();
@@ -102,7 +108,9 @@
       });
 
       // Acessos iniciais ainda com a senha de fábrica: mostrados até o ADM redefinir as senhas
-      TSI.usuarios.acessosIniciaisAtivos().then((acessos) => {
+      TSI.usuarios.acessosIniciaisAtivos().then((lista) => {
+        let acessos = lista;
+        if (fixo) acessos = acessos.filter((a) => a.perfil === fixo);
         if (!acessos.length || !raiz.querySelector('#login-demo')) return;
         const demo = raiz.querySelector('#login-demo');
         demo.hidden = false;
@@ -119,8 +127,10 @@
           const a = acessos.filter((x) => x.usuario === b.dataset.preencher)[0];
           form.usuario.value = a.usuario;
           senha.value = a.senha;
-          form.querySelector('input[name=perfil][value=' + a.perfil + ']').checked = true;
-          raiz.querySelector('#login-dica').textContent = DICA[a.perfil];
+          if (!fixo) {
+            form.querySelector('input[name=perfil][value=' + a.perfil + ']').checked = true;
+            raiz.querySelector('#login-dica').textContent = DICA[a.perfil];
+          }
           erro.hidden = true;
           raiz.querySelector('#login-entrar').focus();
         });
