@@ -1,0 +1,37 @@
+/* Fontes locais (funcionam sem internet). Barlow e Barlow Condensed — licença SIL OFL 1.1,
+   ver assets/fontes/OFL-Barlow.txt */
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fontes/barlow-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fontes/barlow-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fontes/barlow-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fontes/barlow-condensed-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fontes/barlow-condensed-latin-700-normal.woff2") format("woff2");
+}

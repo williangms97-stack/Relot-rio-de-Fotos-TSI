@@ -1,0 +1,20 @@
+{
+  "name": "Relatório Fotográfico de TSI — Dois Marcos Sementes",
+  "short_name": "TSI Dois Marcos",
+  "description": "Registro fotográfico do Tratamento Industrial de Sementes (TSI)",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "id": "./index.html",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#026548",
+  "theme_color": "#026548",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "assets/icones/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icones/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icones/icone-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
