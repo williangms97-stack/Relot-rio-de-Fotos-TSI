@@ -1,0 +1,11 @@
+# dependências e arquivos de sistema
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# nunca versionar planilhas reais nem chaves
+*.xlsx
+*.xls
+.env
+.env.*
