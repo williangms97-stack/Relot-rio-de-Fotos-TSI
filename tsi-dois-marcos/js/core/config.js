@@ -7,7 +7,7 @@
   var TSI = global.TSI = global.TSI || {};
 
   TSI.config = {
-    VERSAO: '1.1.0',
+    VERSAO: '1.1.1',
     NOME_SISTEMA: 'Relatório Fotográfico de TSI',
     EMPRESA: 'Dois Marcos Sementes',
 

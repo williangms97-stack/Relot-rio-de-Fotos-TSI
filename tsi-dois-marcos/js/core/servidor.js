@@ -16,8 +16,8 @@
   var TSI = global.TSI = global.TSI || {};
 
   TSI.servidor = {
-    URL: '',
-    CHAVE_PUBLICA: '',
+    URL: 'https://qxqmsvrqjvzhorjhqpfa.supabase.co',
+    CHAVE_PUBLICA: 'sb_publishable_DT0xrdIu-IdO5J3sf3JGzQ_lDxjQhK3',
 
     /* Quem entra com nome de usuário (ex.: "joao") é procurado no Supabase como
        joao@<DOMINIO_LOGIN>. Precisa ser igual ao usado ao criar os usuários. */
