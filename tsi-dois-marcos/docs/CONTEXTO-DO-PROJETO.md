@@ -62,10 +62,17 @@ em Chrome automatizado (Playwright) com a planilha RQ70 real.
   `TSI.imagem.registrarAnalisador`.
 - `index.html` abre só o aplicativo (sem escolha de perfil); `painel.html` só aceita ADM.
 
-## Etapa 2 — Supabase (código pronto, falta instalar no projeto do usuário)
+## Etapa 2 — Supabase (instalada e ligada em 16/11/2026, versão 1.1.1)
 
-O usuário criou o projeto no Supabase. O código da integração está pronto e testado contra um
-servidor simulado (ver `docs/ARQUITETURA.md`, seção "Servidor central"):
+- Projeto Supabase **"Relot-rio-de-Fotos-TSI"** (ref `qxqmsvrqjvzhorjhqpfa`), na **conta corporativa**
+  do usuário (organização gratuita). Os outros dois sistemas (LASDM e Antecâmara) ficam em outra conta
+  Supabase, a pessoal — são independentes.
+- Feito em 16/11: cadastro livre desligado; `01_estrutura.sql` executado; Edge Function `tsi-usuarios`
+  publicada com "Verify JWT" desligado; administrador criado como `admin@tsi.doismarcos.com.br`
+  (login `admin`); `servidor.js` preenchido. Painel publicado mostra "Conectado ao servidor central".
+- Próximos passos do usuário: entrar no painel, importar o RQ70 e criar os operadores.
+
+O código da integração (ver `docs/ARQUITETURA.md`, seção "Servidor central"):
 
 - `supabase/01_estrutura.sql` (raiz do repositório) — rodar no SQL Editor;
 - `supabase/functions/tsi-usuarios/index.ts` — publicar como Edge Function `tsi-usuarios`;
