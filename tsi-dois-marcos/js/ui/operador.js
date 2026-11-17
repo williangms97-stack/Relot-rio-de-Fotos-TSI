@@ -29,7 +29,7 @@
       let desligarEventos = [];
 
       function novoEstado() {
-        return { tela: 'inicio', origemDetalhe: 'inicio', busca: '', resultado: null, ordem: null, qtd: '', motivo: '', descricao: '',
+        return { tela: 'inicio', origemDetalhe: 'inicio', busca: '', resultado: null, ordem: null, chave: '', qtd: '', motivo: '', descricao: '',
           maquinaId: '', maquinas: [], fotos: [], captura: null, alvo: 'principal', meus: [], rascunho: null, registro: null, detalhe: null };
       }
 
@@ -37,7 +37,7 @@
       function salvarRascunho() {
         if (!E.ordem) return Promise.resolve();
         return TSI.registros.salvarRascunho({
-          usuarioId: usuario.id, ordemTsi: E.ordem.ordemTsi, etapa: E.tela, qtd: E.qtd, motivo: E.motivo, descricao: E.descricao, maquinaId: E.maquinaId,
+          usuarioId: usuario.id, chaveOrdem: E.chave, ordemTsi: E.ordem.ordemTsi, lote: E.ordem.lote, etapa: E.tela, qtd: E.qtd, motivo: E.motivo, descricao: E.descricao, maquinaId: E.maquinaId,
           fotos: E.fotos.map((f) => ({ dados: f.dados, tipo: f.tipo, largura: f.largura, altura: f.altura, tamanho: f.tamanho,
             miniatura: f.miniatura, capturadaEm: f.capturadaEm, verificacao: f.verificacao }))
         }).catch((e) => console.error('[rascunho]', e));
@@ -71,31 +71,44 @@
         return carregarInicio().then(() => ir('inicio'));
       }
 
-      function pesquisar(numero) {
-        E.busca = util.limpar(numero);
+      /** Pesquisa pela ordem de TSI ou pelo lote. Com mais de um lote, o operador escolhe qual vai fotografar. */
+      function pesquisar(texto) {
+        E.busca = util.limpar(texto);
         if (!E.busca) { E.resultado = { tipo: 'vazio' }; desenharResultado(); return Promise.resolve(); }
         return TSI.ordens.consultar(E.busca).then((c) => {
-          if (!c.ordem) { E.resultado = { tipo: 'nao_encontrada', numero: c.numero }; desenharResultado(); return; }
-          if (c.situacao !== SIT.PENDENTE) { E.resultado = { tipo: 'bloqueada', consulta: c }; desenharResultado(); return; }
-          if (E.rascunho && E.rascunho.ordemTsi === c.ordem.ordemTsi) return retomarRascunho();
-          E.resultado = null;
-          E.ordem = c.ordem;
-          E.qtd = ''; E.motivo = ''; E.descricao = ''; E.maquinaId = ''; E.fotos = [];
-          ir('ordem');
+          if (!c.itens.length) { E.resultado = { tipo: 'nao_encontrada', numero: c.busca }; desenharResultado(); return; }
+          if (c.itens.length > 1) { E.resultado = { tipo: 'varios', itens: c.itens }; desenharResultado(); return; }
+          return escolherLote(c.itens[0]);
         });
+      }
+
+      function escolherLote(item) {
+        if (item.situacao !== SIT.PENDENTE) { E.resultado = { tipo: 'bloqueada', consulta: item }; desenharResultado(); return Promise.resolve(); }
+        if (E.rascunho && E.rascunho.chaveOrdem === item.chave) return retomarRascunho();
+        E.resultado = null;
+        E.ordem = item.ordem; E.chave = item.chave;
+        E.qtd = ''; E.motivo = ''; E.descricao = ''; E.maquinaId = ''; E.fotos = [];
+        ir('ordem');
+        return Promise.resolve();
+      }
+
+      function rotuloRascunho() {
+        const r = E.rascunho || {};
+        return r.ordemTsi ? 'Ordem ' + r.ordemTsi + (r.lote ? ' · Lote ' + r.lote : '') : 'Lote ' + (r.lote || '—') + ' (sem ordem)';
       }
 
       function retomarRascunho() {
         const r = E.rascunho;
         if (!r) return Promise.resolve();
-        return TSI.ordens.consultar(r.ordemTsi).then((c) => {
-          if (!c.ordem || c.situacao !== SIT.PENDENTE) {
+        return TSI.ordens.consultarChave(r.chaveOrdem).then((c) => {
+          if (!c || c.situacao !== SIT.PENDENTE) {
             return TSI.registros.descartarRascunho(usuario.id).then(() => {
+              ui.aviso('O registro em andamento foi descartado: ' + rotuloRascunho() + ' não está mais pendente.', 'alerta');
               E.rascunho = null;
-              ui.aviso('O registro em andamento foi descartado: a ordem ' + r.ordemTsi + ' não está mais pendente.', 'alerta');
               desenhar();
             });
           }
+          E.chave = c.chave;
           E.ordem = c.ordem; E.qtd = r.qtd || ''; E.motivo = r.motivo || ''; E.descricao = r.descricao || '';
           E.maquinaId = r.maquinaId || ''; E.fotos = (r.fotos || []).map(comUrl); E.resultado = null;
           const etapa = ETAPAS.some((e) => e.id === r.etapa) ? r.etapa : 'ordem';
@@ -175,9 +188,9 @@
         return html`
           <section class="cartao op-busca">
             <form id="op-form-busca" novalidate>
-              <label for="op-ordem" class="op-rotulo-g">Digite a ordem de tratamento</label>
+              <label for="op-ordem" class="op-rotulo-g">Digite a ordem de tratamento ou o lote</label>
               <div class="op-busca-linha">
-                <input id="op-ordem" name="ordem" type="text" inputmode="numeric" autocomplete="off" enterkeyhint="search" placeholder="Número da ordem de TSI" value="${E.busca}">
+                <input id="op-ordem" name="ordem" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search" placeholder="Ordem de TSI ou lote" value="${E.busca}">
                 <button type="submit" class="btn btn-primario btn-g" id="op-pesquisar">${icone('buscar', 22)}<span>Pesquisar</span></button>
               </div>
             </form>
@@ -190,7 +203,7 @@
             <section class="cartao op-rascunho">
               <div>
                 <h2>${icone('relogio', 20)}Registro em andamento</h2>
-                <p>Ordem <strong>${E.rascunho.ordemTsi}</strong> · parou em “${(ETAPAS.filter((e) => e.id === E.rascunho.etapa)[0] || ETAPAS[0]).titulo}” · ${util.fmtDataHora(E.rascunho.atualizadoEm)}</p>
+                <p><strong>${rotuloRascunho()}</strong> · parou em “${(ETAPAS.filter((e) => e.id === E.rascunho.etapa)[0] || ETAPAS[0]).titulo}” · ${util.fmtDataHora(E.rascunho.atualizadoEm)}</p>
               </div>
               <div class="op-rascunho-acoes">
                 <button type="button" class="btn btn-primario" data-acao="retomar">Continuar</button>
@@ -215,11 +228,25 @@
       function resultadoBusca() {
         const r = E.resultado;
         if (!r) return '';
-        if (r.tipo === 'vazio') return html`<p class="alerta alerta-erro">${icone('alerta', 20)}<span>Digite o número da ordem de tratamento.</span></p>`;
+        if (r.tipo === 'vazio') return html`<p class="alerta alerta-erro">${icone('alerta', 20)}<span>Digite o número da ordem de tratamento ou o lote.</span></p>`;
         if (r.tipo === 'nao_encontrada') return html`
           <div class="alerta alerta-erro">${icone('alerta', 20)}
-            <div><strong>Ordem ${r.numero} não localizada.</strong>
-            <p>Confira o número digitado. Se estiver correto, peça ao administrador para importar a planilha RQ70 atualizada.</p></div>
+            <div><strong>${r.numero} não localizado.</strong>
+            <p>Confira o número da ordem ou o lote digitado. Se estiver correto, peça ao administrador para importar a planilha RQ70 atualizada.</p></div>
+          </div>`;
+        if (r.tipo === 'varios') return html`
+          <div class="op-lotes">
+            <p class="op-lotes-titulo"><strong>${util.plural(r.itens.length, 'lote encontrado', 'lotes encontrados')}.</strong> Toque no lote que vai fotografar.</p>
+            <ul class="op-lista">${r.itens.map((i) => { const o = i.ordem, livre = i.situacao === SIT.PENDENTE; return html`
+              <li><button type="button" class="op-item op-lote ${livre ? '' : 'op-lote-feito'}" data-acao="escolher-lote" data-chave="${i.chave}">
+                <span class="op-item-texto">
+                  <strong>Lote ${o.lote || '—'}</strong>
+                  <span>${o.ordemTsi ? 'Ordem ' + o.ordemTsi : 'Sem ordem de TSI'} · ${o.cultivar || '—'}${o.cultura ? ' · ' + o.cultura : ''}</span>
+                  <span>Solicitação ${TSI.ordens.fmtCampo(o, 'data')} · ${TSI.ordens.fmtQtd(TSI.ordens.qtdPrevista(o), o)}</span>
+                  <span class="op-item-selo">${ui.seloOrdem(i.situacao)}</span>
+                </span>
+                <span class="op-item-seta">${icone('avancar', 20)}</span>
+              </button></li>`; })}</ul>
           </div>`;
         const c = r.consulta, o = c.ordem;
         if (c.situacao === SIT.REGISTRADA) {
@@ -227,8 +254,8 @@
           return html`
             <div class="alerta alerta-alerta op-bloqueio">${icone('cadeado', 20)}
               <div>
-                <strong>A ordem ${o.ordemTsi} já possui registro fotográfico.</strong>
-                <p>Não é possível fazer um novo registro para esta ordem.</p>
+                <strong>${TSI.ordens.rotulo(o)}: já possui registro fotográfico.</strong>
+                <p>Não é possível fazer um novo registro para este lote.</p>
                 <div class="op-bloqueio-dados">
                   ${reg.miniatura ? html`<img src="${reg.miniatura}" alt="Fotografia registrada da amostra">` : ''}
                   ${ui.dados([['Registrado por', reg.operadorNome], ['Data e horário', util.fmtDataHora(reg.criadoEm)], ['Máquina', reg.maquinaNome],
@@ -242,8 +269,8 @@
         return html`
           <div class="alerta alerta-neutro">${icone('anular', 20)}
             <div>
-              <strong>A ordem ${o.ordemTsi} foi ${cfg.ROTULO_SITUACAO_ORDEM[c.situacao].toLowerCase()} pelo administrador.</strong>
-              <p>Esta ordem não aceita registro fotográfico.</p>
+              <strong>${TSI.ordens.rotulo(o)}: ${cfg.ROTULO_SITUACAO_ORDEM[c.situacao].toLowerCase()} pelo administrador.</strong>
+              <p>Este lote não aceita registro fotográfico.</p>
               ${ui.dados([['Responsável', i.usuarioNome], ['Data e horário', util.fmtDataHora(i.dataHora)], { rotulo: 'Motivo', valor: i.motivo, largo: true }])}
             </div>
           </div>`;
@@ -260,8 +287,8 @@
             <button type="button" class="op-item" data-acao="abrir-registro" data-id="${r.id}">
               ${r.miniatura ? html`<img src="${r.miniatura}" alt="" loading="lazy">` : html`<span class="op-item-semfoto">${icone('imagem', 22)}</span>`}
               <span class="op-item-texto">
-                <strong>Ordem ${r.ordemTsi}</strong>
-                <span>${o.lote || '—'} · ${o.cultivar || '—'}</span>
+                <strong>${r.ordemTsi ? 'Ordem ' + r.ordemTsi : 'Sem ordem de TSI'}</strong>
+                <span>Lote ${o.lote || '—'} · ${o.cultivar || '—'}</span>
                 <span>${util.fmtDataHora(r.criadoEm)} · ${r.maquinaNome}</span>
                 <span class="op-item-selo">${r.anulado ? ui.seloSimples('Anulado', 'selo-cancelada', 'anular') : ui.seloEnvio(r.situacaoEnvio)}</span>
               </span>
@@ -276,7 +303,7 @@
         return html`
           <section class="cartao op-ordem">
             <div class="op-ordem-topo">
-              <div><span>Ordem de TSI</span><strong>${o.ordemTsi}</strong></div>
+              <div><span>${o.ordemTsi ? 'Ordem de TSI' : 'Lote sem ordem de TSI'}</span><strong>${o.ordemTsi || o.lote || '—'}</strong>${o.ordemTsi && o.lote ? html`<span class="op-ordem-lote">Lote ${o.lote}</span>` : ''}</div>
               ${ui.seloOrdem(SIT.PENDENTE)}
             </div>
             ${ui.dados(ui.paresDaOrdem(o), 'dados-2col')}
@@ -480,7 +507,7 @@
         return html`
           <section class="cartao">
             ${ui.dados([
-              ['Ordem de tratamento', o.ordemTsi], ['Lote', o.lote], ['Cultivar', o.cultivar], ['Tratamento', o.tratamento],
+              ['Ordem de tratamento', TSI.ordens.numeroOrdem(o)], ['Lote', o.lote], ['Cultivar', o.cultivar], ['Tratamento', o.tratamento],
               ['Máquina', m ? m.nome : '—'], ['Operador', usuario.nome],
               ['Quantidade prevista', TSI.ordens.fmtQtd(prevista, o)], ['Quantidade efetiva', TSI.ordens.fmtQtd(efetiva, o)],
               diverge ? { rotulo: 'Justificativa da divergência', valor: E.motivo + (util.limpar(E.descricao) ? ' — ' + util.limpar(E.descricao) : ''), largo: true } : null
@@ -497,7 +524,7 @@
 
       function enviar(botao) {
         return ui.ocupar(botao, () => TSI.registros.criar({
-          ordemTsi: E.ordem.ordemTsi, qtdEfetiva: E.qtd, motivoDivergencia: E.motivo, descricaoDivergencia: E.descricao,
+          chaveOrdem: E.chave, qtdEfetiva: E.qtd, motivoDivergencia: E.motivo, descricaoDivergencia: E.descricao,
           maquinaId: E.maquinaId, fotos: E.fotos
         }).then((reg) => {
           limparFluxo();
@@ -505,7 +532,7 @@
           return carregarInicio().then(() => ir('sucesso'));
         })).catch((e) => {
           ui.erro(e);
-          if (e && e.amigavel && /já possui registro|não aceita registro|não localizada/.test(e.message)) {
+          if (e && e.amigavel && /já possui registro|não aceita registro|não localizad/.test(e.message)) {
             TSI.registros.descartarRascunho(usuario.id).then(irInicio);
           }
         });
@@ -517,7 +544,7 @@
           <section class="op-sucesso">
             <span class="op-sucesso-icone">${icone('check', 44)}</span>
             <h1>Registro salvo</h1>
-            <p>Ordem ${r.ordemTsi} · ${o.lote || '—'} · ${o.cultivar || '—'}</p>
+            <p>${TSI.ordens.rotulo(r)} · ${o.cultivar || '—'}</p>
             <div class="op-protocolo"><span>Protocolo</span><strong id="op-protocolo">${r.protocolo}</strong></div>
             <div class="op-sucesso-envio">${ui.seloEnvio(r.situacaoEnvio)}<span class="texto-menor">Guardado neste aparelho em ${util.fmtDataHora(r.criadoEm)}</span></div>
             <div class="op-sucesso-acoes">
@@ -643,8 +670,12 @@
         enviar(ev, alvo) { enviar(alvo); },
         novo: irInicio,
         retomar() { retomarRascunho().catch(ui.erro); },
+        'escolher-lote'(ev, alvo) {
+          const r = E.resultado, item = r && r.itens && r.itens.filter((i) => i.chave === alvo.dataset.chave)[0];
+          if (item) escolherLote(item).catch(ui.erro);
+        },
         'descartar-rascunho'() {
-          ui.confirmar({ titulo: 'Descartar registro em andamento?', mensagem: 'Os dados e as fotografias da ordem ' + E.rascunho.ordemTsi + ' que ainda não foram enviados serão apagados deste aparelho.',
+          ui.confirmar({ titulo: 'Descartar registro em andamento?', mensagem: 'Os dados e as fotografias de ' + rotuloRascunho() + ' que ainda não foram enviados serão apagados deste aparelho.',
             rotuloConfirmar: 'Descartar', perigo: true }).then((r) => {
             if (!r) return;
             TSI.registros.descartarRascunho(usuario.id).then(() => { E.rascunho = null; desenhar(); });

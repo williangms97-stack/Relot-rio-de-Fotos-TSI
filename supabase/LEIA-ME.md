@@ -7,7 +7,8 @@ Arquivos desta pasta:
 
 | Arquivo | Para quê |
 |---|---|
-| `01_estrutura.sql` | Tabelas, regras de acesso, funções e o local das fotografias |
+| `01_estrutura.sql` | Tabelas, regras de acesso, funções e o local das fotografias (instalação nova) |
+| `02_lotes.sql` | Atualização da versão 1.2: cada linha do RQ70 passa a ser identificada pelo lote. Só para quem instalou o `01` antes de 17/11/2026 |
 | `functions/tsi-usuarios/index.ts` | Função que cria usuários e redefine senhas a partir do painel |
 
 ## 1. Fechar o cadastro livre
@@ -29,6 +30,10 @@ Supabase → **SQL Editor** → **New query** → cole o conteúdo inteiro de `0
 
 Deve terminar com "Success. No rows returned". O script pode ser executado de novo sem perder dados
 (útil quando sair uma versão nova dele).
+
+> **Já tinha instalado antes de 17/11/2026?** Rode também `02_lotes.sql` uma vez, do mesmo jeito.
+> Ele converte as ordens, os registros e as fotos que já existem para o formato da versão 1.2
+> (uma ordem pode ter vários lotes; lotes sem ordem também são fotografados). Nada é apagado.
 
 Tudo o que ele cria começa com `tsi_` (tabelas e funções) e o bucket de fotos se chama `tsi-fotos`,
 para não se misturar com outras aplicações no mesmo projeto.

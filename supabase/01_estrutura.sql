@@ -9,7 +9,7 @@
 -- Desenho
 -- - Cada tabela guarda o documento completo do sistema em "dados" (jsonb), o mesmo
 --   formato usado no aparelho. Colunas geradas a partir dele dão as chaves, os
---   índices e a regra "uma ordem, um registro válido".
+--   índices e a regra "um lote, um registro válido".
 -- - O navegador NÃO acessa as tabelas diretamente: tudo passa pelas funções
 --   tsi_* abaixo, que conferem quem está chamando (perfil e situação).
 -- - Fotos ficam no Storage, bucket privado "tsi-fotos".
@@ -40,9 +40,11 @@ create table if not exists public.tsi_maquinas (
   atualizado_em timestamptz not null default clock_timestamp()
 );
 
+-- um lote do RQ70; chave "ordem|LOTE" ou "SEM|LOTE|data" (ver js/servicos/ordens.js)
 create table if not exists public.tsi_ordens (
-  ordem_tsi     text primary key generated always as (dados ->> 'ordemTsi') stored,
+  chave         text primary key generated always as (dados ->> 'chave') stored,
   dados         jsonb not null,
+  ordem_tsi     text generated always as (dados ->> 'ordemTsi') stored,
   lote          text generated always as (dados ->> 'lote') stored,
   cultivar      text generated always as (dados ->> 'cultivar') stored,
   removido      boolean not null default false,
@@ -51,7 +53,7 @@ create table if not exists public.tsi_ordens (
 
 -- situação vigente de ordens canceladas ou desconsideradas (reversão = removido)
 create table if not exists public.tsi_ordens_inativas (
-  ordem_tsi     text primary key generated always as (dados ->> 'ordemTsi') stored,
+  chave         text primary key generated always as (dados ->> 'chave') stored,
   dados         jsonb not null,
   removido      boolean not null default false,
   atualizado_em timestamptz not null default clock_timestamp()
@@ -75,7 +77,7 @@ create table if not exists public.tsi_registros (
   id                text primary key generated always as (dados ->> 'id') stored,
   dados             jsonb not null,
   ordem_tsi         text generated always as (dados ->> 'ordemTsi') stored,
-  -- vale o número da ordem enquanto o registro é válido; "anulado:<id>" depois de anulado
+  -- vale a chave do lote enquanto o registro é válido; "anulado:<id>" depois de anulado
   chave_ordem_ativa text generated always as (dados ->> 'chaveOrdemAtiva') stored unique,
   operador_id       text generated always as (dados ->> 'operadorId') stored,
   recebido_em       timestamptz not null default now(),
@@ -295,7 +297,7 @@ begin
       v_dados := format('case when operador_id = %L then dados else dados - ''miniatura'' end', eu.id::text);
     end if;
   end if;
-  v_chave := case when v_tabela in ('tsi_ordens', 'tsi_ordens_inativas') then 'ordem_tsi' else 'id' end;
+  v_chave := case when v_tabela in ('tsi_ordens', 'tsi_ordens_inativas') then 'chave' else 'id' end;
 
   execute format(
     'select coalesce(jsonb_agg(jsonb_build_object(''id'', c, ''dados'', d, ''removido'', removido, ''atualizadoEm'', atualizado_em) order by atualizado_em, c), ''[]''::jsonb)
@@ -345,13 +347,22 @@ begin
       if v_colecao <> 'ordensInativas' then
         raise exception 'Exclusão não permitida em %.', v_colecao using errcode = 'P0001';
       end if;
-      update public.tsi_ordens_inativas set removido = true where ordem_tsi = op ->> 'chave';
+      update public.tsi_ordens_inativas set removido = true where chave = op ->> 'chave';
     elsif v_tipo in ('salvar', 'inserir') then
       if v_valor is null or jsonb_typeof(v_valor) <> 'object' then
         raise exception 'Operação sem dados (%).', v_colecao using errcode = 'P0001';
       end if;
       if v_colecao = 'historico' and v_tipo <> 'inserir' then
         raise exception 'O histórico só aceita inclusões.' using errcode = 'P0001';
+      end if;
+      if v_colecao in ('ordens', 'ordensInativas') and coalesce(v_valor ->> 'chave', '') = '' then
+        -- aplicativo anterior à versão 1.2 (ainda sem a chave do lote)
+        if coalesce(v_valor ->> 'ordemTsi', '') = '' then
+          raise exception 'Ordem sem identificação. Atualize o aplicativo e tente de novo.' using errcode = 'P0001';
+        end if;
+        v_valor := v_valor || jsonb_build_object('chave', coalesce(
+          (select o.chave from public.tsi_ordens o where o.ordem_tsi = v_valor ->> 'ordemTsi' order by o.chave limit 1),
+          (v_valor ->> 'ordemTsi') || '|' || upper(regexp_replace(coalesce(v_valor ->> 'lote', ''), '\s', '', 'g'))));
       end if;
       if v_colecao = 'registros' then
         v_valor := v_valor || jsonb_build_object('situacaoEnvio', 'sincronizado');
@@ -372,7 +383,7 @@ begin
           end if;
         end;
       else
-        v_chave := case when v_tabela in ('tsi_ordens', 'tsi_ordens_inativas') then 'ordem_tsi' else 'id' end;
+        v_chave := case when v_tabela in ('tsi_ordens', 'tsi_ordens_inativas') then 'chave' else 'id' end;
         execute format('insert into public.%1$I (dados) values ($1)
                           on conflict (%2$I) do update set dados = excluded.dados, removido = false', v_tabela, v_chave)
           using v_valor;
@@ -393,10 +404,20 @@ declare
   eu public.tsi_perfis := public.tsi_exigir(false);
   r jsonb := p -> 'registro';
   v_id text := r ->> 'id';
-  v_ordem text := r ->> 'ordemTsi';
+  v_chave text := nullif(r ->> 'chaveOrdem', '');
+  v_rotulo text := coalesce('Ordem ' || nullif(r ->> 'ordemTsi', ''), 'Lote ' || (r -> 'ordem' ->> 'lote'), 'O lote');
   f jsonb;
 begin
-  if v_id is null or v_ordem is null then
+  if v_chave is null and nullif(r ->> 'ordemTsi', '') is not null then
+    -- aplicativo anterior à versão 1.2: localiza o lote pelo número da ordem
+    select o.chave into v_chave from public.tsi_ordens o
+     where o.ordem_tsi = r ->> 'ordemTsi' and not o.removido
+       and (o.dados ->> 'lote' is not distinct from r -> 'ordem' ->> 'lote'
+            or (select count(*) from public.tsi_ordens x where x.ordem_tsi = r ->> 'ordemTsi' and not x.removido) = 1)
+     order by o.chave limit 1;
+    r := r || jsonb_build_object('chaveOrdem', v_chave);
+  end if;
+  if v_id is null or v_chave is null then
     raise exception 'Registro incompleto.' using errcode = 'P0001';
   end if;
   if exists (select 1 from public.tsi_registros where id = v_id) then
@@ -405,11 +426,11 @@ begin
   if (r ->> 'operadorId') is distinct from eu.id::text then
     raise exception 'O registro pertence a outro usuário. Entre com o usuário que fez o registro para enviá-lo.' using errcode = 'P0001';
   end if;
-  if not exists (select 1 from public.tsi_ordens where ordem_tsi = v_ordem and not removido) then
-    raise exception 'A ordem % não existe na base do RQ70.', v_ordem using errcode = 'P0001';
+  if not exists (select 1 from public.tsi_ordens where chave = v_chave and not removido) then
+    raise exception '% não existe na base do RQ70.', v_rotulo using errcode = 'P0001';
   end if;
-  if exists (select 1 from public.tsi_ordens_inativas where ordem_tsi = v_ordem and not removido) then
-    raise exception 'A ordem % foi cancelada ou desconsiderada pelo administrador.', v_ordem using errcode = 'P0001';
+  if exists (select 1 from public.tsi_ordens_inativas where chave = v_chave and not removido) then
+    raise exception '% foi cancelado ou desconsiderado pelo administrador.', v_rotulo using errcode = 'P0001';
   end if;
   if not exists (select 1 from public.tsi_maquinas where id = r ->> 'maquinaId') then
     raise exception 'Máquina não cadastrada.' using errcode = 'P0001';
@@ -418,12 +439,12 @@ begin
     raise exception 'O registro precisa de pelo menos uma fotografia.' using errcode = 'P0001';
   end if;
 
-  r := r || jsonb_build_object('chaveOrdemAtiva', v_ordem, 'situacaoEnvio', 'sincronizado',
+  r := r || jsonb_build_object('chaveOrdemAtiva', v_chave, 'situacaoEnvio', 'sincronizado',
                                'operadorNome', eu.nome, 'operadorUsuario', eu.usuario);
   begin
     insert into public.tsi_registros (dados) values (r);
   exception when unique_violation then
-    raise exception 'A ordem % já possui registro fotográfico feito em outro aparelho.', v_ordem using errcode = 'P0001';
+    raise exception '% já possui registro fotográfico feito em outro aparelho.', v_rotulo using errcode = 'P0001';
   end;
   for f in select * from jsonb_array_elements(p -> 'fotos') loop
     insert into public.tsi_fotos (dados) values ((f - 'dados') || jsonb_build_object('registroId', v_id))

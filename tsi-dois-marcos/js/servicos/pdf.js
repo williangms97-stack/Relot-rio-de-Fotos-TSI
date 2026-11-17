@@ -200,7 +200,7 @@
     pilha(doc, [
       { rotulo: 'CULTIVAR:', valor: o.cultivar || '-', tamRotulo: 16, tamValor: 14.5 },
       { rotulo: 'LOTE:', valor: o.lote || '-', tamRotulo: 16, tamValor: 14.5 },
-      { rotulo: 'ORDEM DE TRATAMENTO:', valor: reg.ordemTsi, tamRotulo: 16, tamValor: 14.5 },
+      { rotulo: 'ORDEM DE TRATAMENTO:', valor: reg.ordemTsi || 'SEM ORDEM DE TSI', tamRotulo: 16, tamValor: 14.5 },
       { rotulo: 'TRATAMENTO:', valor: o.tratamento || '-', tamRotulo: 16, tamValor: 14.5 },
       { rotulo: 'EMBALAGEM:', valor: o.tipoEmbalagem || '-', tamRotulo: 16, tamValor: 14.5 }
     ], MARGEM, colEsq, topo, base, 6.2);
@@ -248,7 +248,7 @@
     fonte(doc, true, 22); cor(doc, 'texto', COR.tinta);
     doc.text(t('FOTOGRAFIAS COMPLEMENTARES'), MARGEM, 18.6);
     fonte(doc, false, 12.5); cor(doc, 'texto', COR.tinta2);
-    doc.text(t('Ordem de tratamento ' + reg.ordemTsi + '   |   Lote ' + (o.lote || '-') + '   |   Cultivar ' + (o.cultivar || '-')), MARGEM, 25.6);
+    doc.text(t('Ordem de tratamento ' + (reg.ordemTsi || 'sem ordem') + '   |   Lote ' + (o.lote || '-') + '   |   Cultivar ' + (o.cultivar || '-')), MARGEM, 25.6);
     logo(doc, 46, 9.8);
 
     var n = fotos.length, colunas = n === 1 ? 1 : n === 2 ? 2 : 3, linhas = Math.ceil(n / colunas);
@@ -275,7 +275,7 @@
 
       var doc = novoDocumento(), geradoEm = util.agora(), o = reg.ordem || {};
       doc.setProperties({
-        title: t('Inspeção de Sementes Tratadas - Ordem ' + reg.ordemTsi),
+        title: t('Inspeção de Sementes Tratadas - ' + TSI.ordens.rotulo(reg)),
         subject: t('Relatório fotográfico de TSI - Lote ' + (o.lote || '') + ' - ' + (o.cultivar || '')),
         author: t(cfg.EMPRESA), creator: t(cfg.NOME_SISTEMA + ' ' + cfg.VERSAO), keywords: t('TSI, ' + reg.protocolo)
       });
@@ -288,7 +288,7 @@
         if (reg.anulado) marcaAnulado(doc);
         rodape(doc, reg, p, total, geradoEm);
       }
-      var nome = util.nomeArquivoSeguro('Inspecao_TSI_Ordem_' + reg.ordemTsi + (o.lote ? '_Lote_' + o.lote : '')) + '.pdf';
+      var nome = util.nomeArquivoSeguro('Inspecao_TSI_' + (reg.ordemTsi ? 'Ordem_' + reg.ordemTsi : 'Sem_Ordem') + (o.lote ? '_Lote_' + o.lote : '')) + '.pdf';
       return { blob: doc.output('blob'), nome: nome };
     });
   }

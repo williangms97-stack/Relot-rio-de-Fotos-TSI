@@ -2,7 +2,7 @@
    Registros fotográficos de TSI
    --------------------------------------------------------------------------
    Regras principais:
-   - cada ordem de TSI aceita um único registro válido (índice único no banco);
+   - cada lote do RQ70 (chave da ordem) aceita um único registro válido (índice único no banco);
    - o operador não edita nem exclui o que enviou;
    - o ADM corrige ou anula, sempre com motivo e histórico campo a campo;
    - nada é apagado: registro anulado continua guardado e visível ao ADM.
@@ -19,6 +19,7 @@
 
   function gerarProtocolo(numero, quando) {
     var d = new Date(quando);
+    numero = String(numero || '').replace(/[^A-Za-z0-9]+/g, '').slice(0, 14) || 'SO';
     return 'TSI-' + numero + '-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '-' +
       p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds()) + '-' + util.codigoCurto(3);
   }
@@ -73,16 +74,17 @@
     /** Cria o registro com as fotografias, a entrada na fila de envio e o evento de auditoria — tudo de uma vez. */
     criar: function (d) {
       var usuario = TSI.auth.exigirLogin();
-      var numero = TSI.ordens.normalizarNumero(d.ordemTsi);
+      var chave = d.chaveOrdem;
       var fotos = d.fotos || [];
       if (!fotos.length) return Promise.reject(Erro('A fotografia da amostra é obrigatória.'));
       if (fotos.length > 1 + cfg.FOTO.MAX_COMPLEMENTARES) return Promise.reject(Erro('Limite de fotografias excedido.'));
 
-      return Promise.all([TSI.ordens.consultar(numero), repo().maquinas.obter(d.maquinaId || '')]).then(function (r) {
+      return Promise.all([TSI.ordens.consultarChave(chave), repo().maquinas.obter(d.maquinaId || '')]).then(function (r) {
         var c = r[0], maquina = r[1];
-        if (!c.ordem) throw Erro('Ordem ' + numero + ' não localizada na base do RQ70.');
-        if (c.situacao === SIT.REGISTRADA) throw Erro('A ordem ' + numero + ' já possui registro fotográfico.');
-        if (c.situacao !== SIT.PENDENTE) throw Erro('A ordem ' + numero + ' está ' + cfg.ROTULO_SITUACAO_ORDEM[c.situacao].toLowerCase() + ' e não aceita registro.');
+        if (!c) throw Erro('Lote não localizado na base do RQ70.');
+        var numero = c.ordem.ordemTsi || null, nome = TSI.ordens.rotulo(c.ordem);
+        if (c.situacao === SIT.REGISTRADA) throw Erro(nome + ': já possui registro fotográfico.');
+        if (c.situacao !== SIT.PENDENTE) throw Erro(nome + ': está ' + cfg.ROTULO_SITUACAO_ORDEM[c.situacao].toLowerCase() + ' e não aceita registro.');
         if (!maquina || !maquina.ativa) throw Erro('Selecione uma máquina ativa.');
 
         var prevista = TSI.ordens.qtdPrevista(c.ordem);
@@ -100,9 +102,10 @@
         });
         var registro = {
           id: id,
-          protocolo: gerarProtocolo(numero, agora),
+          protocolo: gerarProtocolo(numero || c.ordem.lote, agora),
           ordemTsi: numero,
-          chaveOrdemAtiva: numero,           // índice único: impede segundo registro válido da mesma ordem
+          chaveOrdem: c.chave,
+          chaveOrdemAtiva: c.chave,          // índice único: impede segundo registro válido do mesmo lote
           ordem: instantaneo(c.ordem),
           qtdPrevista: prevista,
           qtdEfetiva: efetiva,
@@ -126,7 +129,7 @@
         docsFotos.forEach(function (f) { ops.push({ colecao: 'fotos', tipo: 'inserir', valor: f }); });
         ops.push({ colecao: 'filaSincronizacao', tipo: 'inserir', valor: TSI.sincronizacao.novoItem(registro, 'criar') });
         ops.push({ colecao: 'rascunhos', tipo: 'remover', chave: usuario.id });
-        ops = ops.concat(H().operacoes([H().evento({ entidade: 'registro', entidadeId: id, rotulo: 'Registro da ordem ' + numero,
+        ops = ops.concat(H().operacoes([H().evento({ entidade: 'registro', entidadeId: id, rotulo: 'Registro: ' + nome,
           acao: 'criacao', campo: 'Protocolo', valorNovo: registro.protocolo, dataHora: agora })]));
 
         return repo().lote(ops).then(function () {
@@ -134,7 +137,7 @@
           TSI.sincronizacao.processar().catch(function (e) { console.error('[sincronização]', e); });
           return registro;
         }, function (e) {
-          if (repo().erroDeDuplicidade(e)) throw Erro('A ordem ' + numero + ' já possui registro fotográfico.');
+          if (repo().erroDeDuplicidade(e)) throw Erro(nome + ': já possui registro fotográfico.');
           throw e;
         });
       });
@@ -155,7 +158,7 @@
         var efetiva = validarQuantidade(novo.qtdEfetiva);
         var divergente = haDivergencia(reg.qtdPrevista, efetiva);
         var just = validarJustificativa(divergente, novo.motivoDivergencia, novo.descricaoDivergencia);
-        var agora = util.agora(), rot = 'Registro da ordem ' + reg.ordemTsi, evs = [];
+        var agora = util.agora(), rot = 'Registro: ' + TSI.ordens.rotulo(reg), evs = [];
         function mudou(campo, antes, depois) {
           if ((antes === null || antes === undefined ? '' : antes) === (depois === null || depois === undefined ? '' : depois)) return;
           evs.push(H().evento({ entidade: 'registro', entidadeId: reg.id, rotulo: rot, acao: 'edicao', campo: campo,
@@ -194,7 +197,7 @@
         reg.anulado = { em: agora, porId: adm.id, porNome: adm.nome, motivo: motivo };
         reg.chaveOrdemAtiva = 'anulado:' + reg.id;
         reg.situacaoEnvio = cfg.SITUACAO_ENVIO.AGUARDANDO;
-        var ev = H().evento({ entidade: 'registro', entidadeId: reg.id, rotulo: 'Registro da ordem ' + reg.ordemTsi, acao: 'anulacao',
+        var ev = H().evento({ entidade: 'registro', entidadeId: reg.id, rotulo: 'Registro: ' + TSI.ordens.rotulo(reg), acao: 'anulacao',
           campo: 'Situação do registro', valorAnterior: 'Válido', valorNovo: 'Anulado', motivo: motivo, dataHora: agora });
         var ops = [{ colecao: 'registros', tipo: 'salvar', valor: reg },
           { colecao: 'filaSincronizacao', tipo: 'inserir', valor: TSI.sincronizacao.novoItem(reg, 'atualizar') }].concat(H().operacoes([ev]));

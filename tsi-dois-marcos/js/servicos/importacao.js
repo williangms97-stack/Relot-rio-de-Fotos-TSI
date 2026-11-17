@@ -1,10 +1,13 @@
 /* ==========================================================================
    Importação da planilha RQ70 (Solicitação de Reembalagem e Tratamento)
    --------------------------------------------------------------------------
-   1. ler(arquivo)        lê .xlsx/.xls com SheetJS e identifica as colunas pelo cabeçalho
-   2. analisar(leitura)   compara com a base: novas, atualizadas, sem alteração,
-                          sem número de TSI e duplicadas na planilha
-   3. confirmar(leitura)  grava ordens, importação, linhas lidas e histórico de uma só vez
+   1. ler(arquivo)          lê .xlsx/.xls com SheetJS e identifica as colunas pelo cabeçalho
+   2. analisar(leituras)    compara um ou vários arquivos com a base: lotes novos, atualizados,
+                            sem alteração e duplicados; reconhece a cultura pelo conteúdo
+   3. confirmar(leituras)   grava lotes, importações, linhas lidas e histórico de uma só vez
+
+   Cada linha é um lote (ver js/servicos/ordens.js). A importação só acrescenta e atualiza:
+   o que não vier nos arquivos continua como está.
 
    A planilha é a fonte dos dados: nada é inventado. Célula vazia ou com erro do
    Excel (#REF!, #N/A) é importada vazia e apontada na pré-visualização.
@@ -225,7 +228,7 @@
         return { campo: def.campo, rotulo: def.rotulo, coluna: m ? m.coluna : null, origem: m ? m.origem : 'ausente', cabecalhoLido: m ? m.cabecalhoLido : '' };
       });
       var avisos = [];
-      if (escolhida.aba !== IMP.ABA_PREFERIDA) avisos.push('A aba "' + IMP.ABA_PREFERIDA + '" não foi encontrada; os dados foram lidos da aba "' + escolhida.aba + '".');
+      if (escolhida.aba !== IMP.ABA_PREFERIDA && abas.indexOf(IMP.ABA_PREFERIDA) < 0) avisos.push('A aba "' + IMP.ABA_PREFERIDA + '" não foi encontrada; os dados foram lidos da aba "' + escolhida.aba + '".');
       var porPosicao = mapeamento.filter(function (m) { return m.origem === 'posicao'; });
       if (porPosicao.length) avisos.push('Colunas sem cabeçalho reconhecido, lidas pela posição padrão do RQ70: ' +
         porPosicao.map(function (m) { return m.rotulo + ' (' + m.coluna + ')'; }).join(', ') + '.');
@@ -234,7 +237,7 @@
       if (celulasComErro) avisos.push(util.plural(celulasComErro, 'célula com erro do Excel (#REF!, #N/A…) foi importada vazia', 'células com erro do Excel (#REF!, #N/A…) foram importadas vazias') + '.');
 
       return {
-        arquivoNome: nome, arquivoTamanho: arquivo.size, aba: escolhida.aba,
+        arquivoNome: nome, arquivoTamanho: arquivo.size, arquivoModificado: arquivo.lastModified || 0, aba: escolhida.aba,
         linhaCabecalho: escolhida.det.linhaCabecalho + 1, primeiraLinhaDados: escolhida.det.linhaCabecalho + 2,
         mapeamento: mapeamento, linhas: linhas, avisos: avisos
       };
@@ -248,107 +251,284 @@
     return String(va) === String(vb);
   }
 
-  function montarOrdem(valores, cultura) {
+  /* ------------------------------------------------------------------------
+     Cultura pelo conteúdo da linha
+     O RQ70 não tem coluna de cultura e o nome do arquivo não segue padrão, então a
+     cultura é reconhecida pela cultivar, pela peneira, pela embalagem e pelo tratamento.
+     Cada sinal soma pontos; vence a cultura com mais pontos (empate = não identificada).
+     Depois, vale o que o sistema já aprendeu (cultivar já importada com cultura) e,
+     por fim, a cultura única das demais linhas do mesmo arquivo.
+     ------------------------------------------------------------------------ */
+  var CULTURAS = ['Soja', 'Milho', 'Trigo', 'Sorgo'];
+  var SINAIS = [
+    // tecnologia da cultivar
+    { cultura: 'Soja', campo: 'cultivar', pontos: 3, re: /I2X|IPRO|\bCE\b|\bE3\b|XTD|\bRR2?\b|ENLIST|CONKESTA/i },
+    { cultura: 'Milho', campo: 'cultivar', pontos: 3, re: /VIP\s*3|PRO\s*[234]\b|\bVT\s*PRO|VYHR|\bPWU?\b|\bYHR\b|XDDFZ|RSCVZ|\bTRE\b/i },
+    { cultura: 'Trigo', campo: 'cultivar', pontos: 3, re: /^BRS\b|^BRS\s*\d|^ORS|^TBIO|^FPS\b/i },
+    // peneira: soja "P1 5,5"; milho "C3C", "R2L"; trigo "P1 P0"
+    { cultura: 'Soja', campo: 'peneira', pontos: 2, re: /^P\s*[12]\s*\d+[.,]?\d*\s*$/i },
+    { cultura: 'Soja', campo: 'peneira', pontos: 1, re: /^P\s*[12]\s*$/i },
+    { cultura: 'Milho', campo: 'peneira', pontos: 3, re: /^[CR]\s*\d\s*[CLMG]?\s*$/i },
+    { cultura: 'Trigo', campo: 'peneira', pontos: 3, re: /\bP\s*0\b/i },
+    // embalagem e tratamento (sinais fracos)
+    { cultura: 'Soja', campo: 'tipoEmbalagem', pontos: 1, re: /\b5\s*MI\b|I2X|IPRO/i },
+    { cultura: 'Soja', campo: 'embalagemOriginal', pontos: 1, re: /\b5\s*MI\b/i },
+    { cultura: 'Milho', campo: 'embalagemOriginal', pontos: 1, re: /\b60\s*M\b/i },
+    { cultura: 'Milho', campo: 'tratamento', pontos: 1, re: /PONCHO|ACRONIS/i }
+  ];
+
+  function pontuarCultura(v) {
+    var pontos = {};
+    SINAIS.forEach(function (s) {
+      var t = v[s.campo];
+      if (t !== null && t !== undefined && s.re.test(String(t))) pontos[s.cultura] = (pontos[s.cultura] || 0) + s.pontos;
+    });
+    var melhor = null, max = 0, empate = false;
+    Object.keys(pontos).forEach(function (c) {
+      if (pontos[c] > max) { melhor = c; max = pontos[c]; empate = false; } else if (pontos[c] === max) empate = true;
+    });
+    return empate ? null : melhor;
+  }
+
+  /** cultivar -> cultura, a partir do que já está na base (só quando não há dúvida). */
+  function aprenderCulturas(ordens) {
+    var visto = {};
+    ordens.forEach(function (o) {
+      var k = util.chave(o.cultivar);
+      if (!k || !o.cultura) return;
+      if (visto[k] === undefined) visto[k] = o.cultura;
+      else if (visto[k] !== o.cultura) visto[k] = null;
+    });
+    return visto;
+  }
+
+  function montarOrdem(valores) {
     var o = {};
     O().CAMPOS.forEach(function (def) { o[def.campo] = valores[def.campo] === undefined ? null : valores[def.campo]; });
+    o.ordemTsi = O().ordemValida(o.ordemTsi) || null;
     o.dataTexto = valores.dataTexto || null;
     o.classeEmbalagem = O().classificarEmbalagem(o.tipoEmbalagem);
-    o.cultura = cultura || null;
     return o;
   }
 
-  function diferencas(atual, nova, culturaInformada) {
+  function diferencas(atual, nova) {
     var d = [];
     O().CAMPOS.forEach(function (def) {
-      if (def.campo === 'ordemTsi') return;
       var de = atual[def.campo], para = nova[def.campo];
+      if (def.campo === 'ordemTsi' && !para) return;           // a importação nunca apaga o número da ordem
       if (def.campo === 'data' && iguais(de, para) && !iguais(atual.dataTexto, nova.dataTexto)) { de = atual.dataTexto; para = nova.dataTexto; }
       if (!iguais(de, para)) d.push({ campo: def.campo, rotulo: def.rotulo, de: O().fmtCampo(atual, def.campo), para: O().fmtCampo(nova, def.campo) });
     });
-    if (culturaInformada && !iguais(atual.cultura, culturaInformada)) {
-      d.push({ campo: 'cultura', rotulo: 'Cultura', de: atual.cultura || '—', para: culturaInformada });
+    if (nova.cultura && !iguais(atual.cultura, nova.cultura)) {
+      d.push({ campo: 'cultura', rotulo: 'Cultura', de: atual.cultura || '—', para: nova.cultura });
     }
     return d;
   }
 
-  /** Classifica cada linha lida em relação à base atual. Não grava nada. */
-  function analisar(leitura, cultura) {
-    var cult = util.limpar(cultura) || null;
-    return repo().ordens.listar().then(function (existentes) {
-      var mapa = {}, vistos = {};
-      existentes.forEach(function (o) { mapa[o.ordemTsi] = o; });
-      var resumo = { lidas: leitura.linhas.length, novas: 0, atualizadas: 0, inalteradas: 0, semTsi: 0, duplicadas: 0 };
-      var itens = leitura.linhas.map(function (l) {
-        var numero = l.valores.ordemTsi;
-        var item = { linha: l.linha, ordemTsi: numero || null, valores: l.valores, erros: l.erros, ordem: null, diferencas: [], situacao: '' };
-        if (!numero) { item.situacao = 'sem_tsi'; resumo.semTsi++; return item; }
-        if (vistos[numero]) { item.situacao = 'duplicada'; item.primeiraLinha = vistos[numero]; resumo.duplicadas++; return item; }
-        vistos[numero] = l.linha;
-        item.ordem = montarOrdem(l.valores, cult);
-        var atual = mapa[numero];
-        if (!atual) { item.situacao = 'nova'; resumo.novas++; return item; }
-        item.diferencas = diferencas(atual, item.ordem, cult);
-        if (item.diferencas.length) { item.situacao = 'atualizada'; resumo.atualizadas++; }
-        else { item.situacao = 'inalterada'; resumo.inalteradas++; }
-        item.atual = atual;
-        return item;
+  /** Arquivos em ordem do mais antigo para o mais novo: em linhas repetidas, vale o arquivo mais novo. */
+  function ordenarLeituras(leituras) {
+    return leituras.map(function (l, i) { return { l: l, i: i }; }).sort(function (a, b) {
+      return ((a.l.arquivoModificado || 0) - (b.l.arquivoModificado || 0)) || (a.i - b.i);
+    }).map(function (x) { return x.l; });
+  }
+
+  /** Classifica cada linha lida (de um ou vários arquivos) em relação à base atual. Não grava nada.
+      escolhas = { "<arquivo>:<linha>": cultura } — culturas definidas à mão na pré-visualização. */
+  function analisar(leituras, escolhas) {
+    leituras = ordenarLeituras([].concat(leituras || []));
+    escolhas = escolhas || {};
+    return O().visao().then(function (visao) {
+      var porChave = {}, porOrdemLote = {}, porOrdem = {}, semOrdemPorLote = {};
+      visao.forEach(function (i) {
+        var o = i.ordem, lote = O().normalizarLote(o.lote);
+        porChave[i.chave] = i;
+        if (o.ordemTsi) {
+          porOrdemLote[o.ordemTsi + '|' + lote] = i;
+          (porOrdem[o.ordemTsi] = porOrdem[o.ordemTsi] || []).push(i);
+        } else if (lote) (semOrdemPorLote[lote] = semOrdemPorLote[lote] || []).push(i);
       });
-      return { cultura: cult, resumo: resumo, itens: itens };
+      var aprendidas = aprenderCulturas(visao.map(function (i) { return i.ordem; }));
+
+      // quantas linhas de cada ordem vieram nos arquivos (para reconhecer troca de lote)
+      var linhasDaOrdem = {};
+      leituras.forEach(function (l) {
+        l.linhas.forEach(function (x) { var n = O().ordemValida(x.valores.ordemTsi); if (n) linhasDaOrdem[n] = (linhasDaOrdem[n] || 0) + 1; });
+      });
+
+      var itens = [], ocupadas = {}, vinculadas = {};
+      var arquivos = leituras.map(function (l, ia) {
+        var resumo = { lidas: l.linhas.length, novas: 0, atualizadas: 0, inalteradas: 0, semIdentificacao: 0, duplicadas: 0, semOrdem: 0, vinculadas: 0 };
+        var repeticoes = {}, semOrdemChave = '';
+        var doArquivo = l.linhas.map(function (x) {
+          var v = x.valores, it = { id: ia + ':' + x.linha, arquivo: ia, linha: x.linha, valores: v, erros: x.erros, diferencas: [], avisos: [], situacao: '' };
+          var nova = montarOrdem(v), lote = O().normalizarLote(nova.lote), ordem = nova.ordemTsi;
+          it.ordemTsi = ordem;
+          if (!ordem && !lote) { it.situacao = 'sem_identificacao'; return it; }
+          if (!ordem) resumo.semOrdem++;
+
+          // cultura pelo conteúdo
+          nova.cultura = pontuarCultura(nova);
+          it.origemCultura = nova.cultura ? 'conteudo' : null;
+          if (!nova.cultura && aprendidas[util.chave(nova.cultivar)]) { nova.cultura = aprendidas[util.chave(nova.cultivar)]; it.origemCultura = 'aprendida'; }
+
+          // a que lote da base esta linha corresponde
+          var atual = null;
+          if (ordem) {
+            atual = porOrdemLote[ordem + '|' + lote] || null;
+            if (!atual && semOrdemPorLote[lote]) {
+              // lote que estava sem ordem: a ordem foi informada agora
+              var livres = semOrdemPorLote[lote].filter(function (c) { return !vinculadas[c.chave]; });
+              var mesmaData = livres.filter(function (c) { return nova.data && c.ordem.data === nova.data; });
+              var alvo = mesmaData.length === 1 ? mesmaData[0] : livres.length === 1 ? livres[0] : null;
+              if (alvo) { atual = alvo; vinculadas[alvo.chave] = true; it.vinculo = true; }
+              else if (livres.length > 1) it.avisos.push('Há ' + livres.length + ' solicitações deste lote sem ordem; esta linha entra como lote novo. Confira em Ordens.');
+            }
+            if (!atual && porOrdem[ordem] && porOrdem[ordem].length === 1 && linhasDaOrdem[ordem] === 1) {
+              atual = porOrdem[ordem][0];   // mesma ordem com o lote corrigido na planilha
+            }
+          } else {
+            // mesmo lote sem ordem mais de uma vez na mesma data: cada linha é uma solicitação
+            var base = O().montarChave(nova);
+            repeticoes[base] = (repeticoes[base] || 0) + 1;
+            semOrdemChave = repeticoes[base] > 1 ? base + '#' + repeticoes[base] : base;
+            atual = porChave[semOrdemChave] || null;
+          }
+          it.chave = atual ? atual.chave : ordem ? O().montarChave(nova) : semOrdemChave;
+          nova.chave = it.chave;
+          if (atual && !ordem && atual.ordem.ordemTsi) nova.ordemTsi = atual.ordem.ordemTsi;   // não apaga ordem já informada
+          it.ordem = nova;
+          it.atual = atual ? atual.ordem : null;
+          it.registro = atual ? atual.registro : null;
+          it.situacaoOrdem = atual ? atual.situacao : null;
+
+          // mesma linha em outro arquivo ou repetida no mesmo arquivo
+          var antes = ocupadas[it.chave];
+          if (antes) {
+            if (antes.arquivo === ia) { it.situacao = 'duplicada'; it.primeiraLinha = antes.linha; return it; }
+            antes.situacao = 'substituida'; antes.substituidaPor = l.arquivoNome;
+          }
+          ocupadas[it.chave] = it;
+          return it;
+        });
+        itens = itens.concat(doArquivo);
+        return { indice: ia, nome: l.arquivoNome, tamanho: l.arquivoTamanho, aba: l.aba, linhaCabecalho: l.linhaCabecalho,
+          mapeamento: l.mapeamento, avisos: l.avisos, resumo: resumo };
+      });
+
+      // cultura única do arquivo para as linhas não reconhecidas; depois, as escolhidas à mão
+      arquivos.forEach(function (a) {
+        var doArq = itens.filter(function (it) { return it.arquivo === a.indice && it.ordem; });
+        var culturas = util.unicos(doArq.map(function (it) { return it.ordem.cultura; }).filter(Boolean));
+        a.culturaUnica = culturas.length === 1 ? culturas[0] : null;
+        doArq.forEach(function (it) {
+          if (!it.ordem.cultura && a.culturaUnica) { it.ordem.cultura = a.culturaUnica; it.origemCultura = 'arquivo'; }
+          if (escolhas[it.id]) { it.ordem.cultura = escolhas[it.id]; it.origemCultura = 'manual'; }
+          if (!it.ordem.cultura && it.atual && it.atual.cultura) { it.ordem.cultura = it.atual.cultura; it.origemCultura = 'base'; }
+        });
+      });
+
+      // situação final de cada linha
+      var total = { lidas: 0, novas: 0, atualizadas: 0, inalteradas: 0, semIdentificacao: 0, duplicadas: 0, substituidas: 0,
+        semOrdem: 0, vinculadas: 0, semCultura: 0, fotografadas: 0, mudancaCultura: 0 };
+      var culturasResumo = {};
+      itens.forEach(function (it) {
+        var a = arquivos[it.arquivo].resumo;
+        total.lidas++;
+        if (it.situacao === 'sem_identificacao') { a.semIdentificacao++; total.semIdentificacao++; return; }
+        if (it.situacao === 'duplicada') { a.duplicadas++; total.duplicadas++; return; }
+        if (it.situacao === 'substituida') { total.substituidas++; return; }
+        if (!it.ordem.ordemTsi) total.semOrdem++;
+        if (!it.ordem.cultura) total.semCultura++;
+        var c = it.ordem.cultura || 'Não identificada';
+        culturasResumo[c] = (culturasResumo[c] || 0) + 1;
+        if (!it.atual) { it.situacao = 'nova'; a.novas++; total.novas++; return; }
+        it.diferencas = diferencas(it.atual, it.ordem);
+        if (!it.diferencas.length) { it.situacao = 'inalterada'; a.inalteradas++; total.inalteradas++; return; }
+        it.situacao = 'atualizada'; a.atualizadas++; total.atualizadas++;
+        if (it.vinculo) { a.vinculadas++; total.vinculadas++; }
+        if (it.atual.cultura && it.ordem.cultura && it.atual.cultura !== it.ordem.cultura) {
+          total.mudancaCultura++;
+          it.avisos.push('A cultura deste lote vai mudar de ' + it.atual.cultura + ' para ' + it.ordem.cultura + '.');
+        }
+        if (it.registro) {
+          total.fotografadas++;
+          it.avisos.push('Este lote já foi fotografado. A alteração não muda o registro feito.');
+        }
+      });
+      arquivos.forEach(function (a) {
+        var c = {};
+        itens.forEach(function (it) {
+          if (it.arquivo !== a.indice || !it.ordem || ['duplicada', 'substituida', 'sem_identificacao'].indexOf(it.situacao) >= 0) return;
+          var k = it.ordem.cultura || 'Não identificada';
+          c[k] = (c[k] || 0) + 1;
+        });
+        a.culturas = c;
+      });
+      return { arquivos: arquivos, itens: itens, resumo: total, culturas: culturasResumo, escolhas: escolhas };
     });
   }
 
-  /** Grava a importação. Ordens existentes são atualizadas sem tocar nos registros fotográficos. */
-  function confirmar(leitura, cultura) {
+  function textoCulturas(c) {
+    return Object.keys(c || {}).sort().map(function (k) { return k + ' (' + util.fmtNum(c[k], 0) + ')'; }).join(', ');
+  }
+
+  /** Grava a importação (uma por arquivo). Lotes existentes são atualizados sem tocar nos registros fotográficos;
+      o que não veio nos arquivos continua como está. */
+  function confirmar(leituras, escolhas) {
     var adm = TSI.auth.exigirAdm();
-    return analisar(leitura, cultura).then(function (an) {
-      var agora = util.agora(), id = util.uuid(), ops = [], evs = [];
+    leituras = ordenarLeituras([].concat(leituras || []));
+    return analisar(leituras, escolhas).then(function (an) {
+      var agora = util.agora(), grupo = util.uuid(), ops = [], evs = [];
+      var ids = an.arquivos.map(function () { return util.uuid(); });
       an.itens.forEach(function (it) {
+        var id = ids[it.arquivo], nomeArq = an.arquivos[it.arquivo].nome;
         if (it.situacao === 'nova') {
           var nova = it.ordem;
           nova.criadoEm = agora; nova.atualizadoEm = agora; nova.importacaoId = id; nova.ultimaImportacaoId = id; nova.linhaPlanilha = it.linha;
           ops.push({ colecao: 'ordens', tipo: 'salvar', valor: nova });
         } else if (it.situacao === 'atualizada') {
-          var o = it.atual, dados = it.ordem;
-          O().CAMPOS.forEach(function (def) { o[def.campo] = dados[def.campo]; });
+          var o = Object.assign({}, it.atual), dados = it.ordem;
+          O().CAMPOS.forEach(function (def) { if (def.campo !== 'ordemTsi' || dados.ordemTsi) o[def.campo] = dados[def.campo]; });
+          o.chave = it.chave;
           o.dataTexto = dados.dataTexto;
           o.classeEmbalagem = dados.classeEmbalagem;
-          if (an.cultura) o.cultura = an.cultura;
+          if (dados.cultura) o.cultura = dados.cultura;
           o.atualizadoEm = agora; o.ultimaImportacaoId = id; o.linhaPlanilha = it.linha;
           ops.push({ colecao: 'ordens', tipo: 'salvar', valor: o });
           it.diferencas.forEach(function (d) {
-            evs.push(H().evento({ entidade: 'ordem', entidadeId: it.ordemTsi, rotulo: 'Ordem ' + it.ordemTsi, acao: 'atualizacao',
+            evs.push(H().evento({ entidade: 'ordem', entidadeId: it.chave, rotulo: O().rotulo(o), acao: 'atualizacao',
               campo: d.rotulo, valorAnterior: d.de === '—' ? null : d.de, valorNovo: d.para === '—' ? null : d.para,
-              motivo: 'Planilha ' + leitura.arquivoNome, dataHora: agora }));
+              motivo: (d.campo === 'ordemTsi' ? 'Ordem informada na planilha ' : 'Planilha ') + nomeArq, dataHora: agora }));
           });
         }
       });
 
-      var importacao = {
-        id: id, dataHora: agora, usuarioId: adm.id, usuarioNome: adm.nome,
-        arquivoNome: leitura.arquivoNome, arquivoTamanho: leitura.arquivoTamanho, aba: leitura.aba,
-        linhaCabecalho: leitura.linhaCabecalho, cultura: an.cultura, resumo: an.resumo,
-        mapeamento: leitura.mapeamento, avisos: leitura.avisos
-      };
       var campos = O().CAMPOS.map(function (c) { return c.campo; });
-      var linhas = {
-        importacaoId: id,
-        campos: campos,
-        linhas: an.itens.map(function (it) {
-          return { linha: it.linha, situacao: it.situacao, dataTexto: it.valores.dataTexto || null,
-            erros: it.erros.length ? it.erros : undefined,
-            v: campos.map(function (c) { return it.valores[c] === undefined ? null : it.valores[c]; }) };
-        })
-      };
-      var r = an.resumo;
-      evs.push(H().evento({ entidade: 'importacao', entidadeId: id, rotulo: 'Planilha ' + leitura.arquivoNome, acao: 'importacao', campo: 'Resultado',
-        valorNovo: r.lidas + ' linhas lidas · ' + r.novas + ' novas · ' + r.atualizadas + ' atualizadas · ' + r.inalteradas + ' sem alteração · ' +
-          r.semTsi + ' sem ordem de TSI · ' + r.duplicadas + ' duplicadas', dataHora: agora }));
+      an.arquivos.forEach(function (a) {
+        var id = ids[a.indice], r = a.resumo;
+        ops.push({ colecao: 'importacoes', tipo: 'inserir', valor: {
+          id: id, grupoId: grupo, dataHora: agora, usuarioId: adm.id, usuarioNome: adm.nome,
+          arquivoNome: a.nome, arquivoTamanho: a.tamanho, aba: a.aba, linhaCabecalho: a.linhaCabecalho,
+          cultura: textoCulturas(a.culturas) || null, culturas: a.culturas,
+          resumo: { lidas: r.lidas, novas: r.novas, atualizadas: r.atualizadas, inalteradas: r.inalteradas,
+            semTsi: r.semOrdem, semIdentificacao: r.semIdentificacao, duplicadas: r.duplicadas, vinculadas: r.vinculadas },
+          mapeamento: a.mapeamento, avisos: a.avisos } });
+        ops.push({ colecao: 'importacoesLinhas', tipo: 'inserir', valor: {
+          importacaoId: id, campos: campos,
+          linhas: an.itens.filter(function (it) { return it.arquivo === a.indice; }).map(function (it) {
+            return { linha: it.linha, situacao: it.situacao, cultura: it.ordem ? it.ordem.cultura || null : null, dataTexto: it.valores.dataTexto || null,
+              erros: it.erros.length ? it.erros : undefined,
+              v: campos.map(function (c) { return it.valores[c] === undefined ? null : it.valores[c]; }) };
+          }) } });
+        evs.push(H().evento({ entidade: 'importacao', entidadeId: id, rotulo: 'Planilha ' + a.nome, acao: 'importacao', campo: 'Resultado',
+          valorNovo: r.lidas + ' linhas lidas · ' + r.novas + ' novas · ' + r.atualizadas + ' atualizadas · ' + r.inalteradas + ' sem alteração · ' +
+            r.semOrdem + ' sem ordem de TSI · ' + r.duplicadas + ' duplicadas' + (textoCulturas(a.culturas) ? ' · ' + textoCulturas(a.culturas) : ''),
+          dataHora: agora }));
+      });
 
-      ops.push({ colecao: 'importacoes', tipo: 'inserir', valor: importacao });
-      ops.push({ colecao: 'importacoesLinhas', tipo: 'inserir', valor: linhas });
       return repo().lote(ops.concat(H().operacoes(evs))).then(function () {
         TSI.eventos.emitir('ordens:alterado');
-        return importacao;
+        return { resumo: an.resumo, arquivos: an.arquivos.length };
       });
     });
   }
@@ -357,8 +537,12 @@
     ler: ler,
     analisar: analisar,
     confirmar: confirmar,
+    CULTURAS: CULTURAS,
+    detectarCultura: pontuarCultura,
+    textoCulturas: textoCulturas,
     ROTULO_SITUACAO: {
-      nova: 'Nova', atualizada: 'Atualizada', inalterada: 'Sem alteração', sem_tsi: 'Sem ordem de TSI', duplicada: 'Duplicada na planilha'
+      nova: 'Nova', atualizada: 'Atualizada', inalterada: 'Sem alteração', sem_identificacao: 'Sem ordem e sem lote',
+      sem_tsi: 'Sem ordem de TSI', duplicada: 'Duplicada na planilha', substituida: 'Repetida em arquivo mais novo'
     },
     listar: function () {
       return repo().importacoes.listar().then(function (l) {

@@ -40,12 +40,12 @@ fábrica estiverem ativas, a tela de acesso mostra um quadro lembrando disso.
 
 ## Roteiro de demonstração
 
-1. Abra o **painel** (`painel.html`), entre como administrador e abra **Importar RQ70**. Informe a cultura (ex.: Soja) e selecione a
-   planilha. Confira a pré-visualização e confirme.
+1. Abra o **painel** (`painel.html`), entre como administrador e abra **Importar RQ70**. Selecione uma ou várias
+   planilhas (podem ser de culturas diferentes). Confira a pré-visualização e confirme.
 2. Em **Ordens**, filtre "Solicitada até" a data de implantação, selecione todas as do filtro e use
    **Desconsiderar** — assim a cobertura fotográfica passa a medir só as ordens que devem ter foto.
 3. Clique em **Aplicativo do celular** (ou abra `index.html` no celular e entre com o usuário operador). Digite uma ordem
-   pendente, siga as cinco etapas e envie.
+   pendente ou um lote (se a ordem tiver mais de um lote, escolha qual), siga as cinco etapas e envie.
 4. Volte ao painel: o registro aparece em **Registros** e no **Painel**. Abra o registro e clique em
    **GERAR PDF**.
 5. Experimente **Corrigir** e **Anular** no registro e veja as alterações em **Histórico**.
@@ -65,8 +65,9 @@ perfis e identificar quem fez cada registro, mas não é segurança de produçã
 16 mil colunas (64 MB por dentro). A leitura leva de 3 a 10 segundos e usa bastante memória; faça a
 importação no computador. Limpar a formatação das colunas vazias no Excel resolve na origem.
 
-**A cultura não vem do RQ70.** A planilha não tem coluna de cultura; o valor é informado na tela de
-importação e alimenta o filtro e o gráfico por cultura.
+**A cultura não vem de uma coluna do RQ70.** Ela é reconhecida pelo conteúdo de cada linha (tecnologia
+da cultivar, peneira, embalagem, tratamento); o nome do arquivo não importa. O que o sistema não
+reconhecer aparece como "Cultura não identificada" na pré-visualização, para o administrador escolher.
 
 **A verificação da foto é básica.** Confere se o arquivo é uma imagem válida, se tem conteúdo, a
 resolução mínima (800×600), a iluminação e a nitidez por medidas simples de pixels. Iluminação e
@@ -75,15 +76,19 @@ ligar um serviço de visão computacional depois.
 
 ## Regras implementadas
 
-- A **ordem de TSI** (coluna U) é a chave. A ordem de reembalagem (coluna T) é só informativa.
+- Cada linha do RQ70 é um **lote a fotografar**. Identificação: ordem de TSI (coluna U) + lote; sem
+  ordem, lote + data da solicitação. Uma ordem pode ter mais de um lote. A ordem de reembalagem
+  (coluna T) é só informativa.
 - Colunas identificadas pelo cabeçalho (linha "Data | Armazém | … | Ordem de TSI"), com a linha de
   blocos acima (REEMBALAGEM / TSI) decidindo as colunas de nome repetido. Se um cabeçalho não for
   reconhecido, vale a posição padrão A–V.
-- Reimportar a planilha atualiza ordens existentes sem tocar nos registros fotográficos; cada campo
-  alterado vai para o histórico.
-- Linhas sem ordem de TSI e ordens repetidas na planilha são apontadas e não entram.
-- Uma ordem aceita um único registro válido (índice único no banco). Registro anulado pelo ADM
-  continua guardado e libera a ordem para novo registro.
+- Reimportar atualiza lotes existentes sem tocar nos registros fotográficos; cada campo alterado vai
+  para o histórico. O que não vier na planilha continua como está.
+- Lote sem ordem de TSI entra e pode ser fotografado (pesquisa pelo lote). Quando um RQ novo trouxer o
+  mesmo lote com ordem, a ordem é ligada ao lote já existente.
+- Linhas sem ordem e sem lote, e lotes repetidos com ordem na mesma planilha, são apontados e não entram.
+- Um lote aceita um único registro válido (índice único no banco). Registro anulado pelo ADM
+  continua guardado e libera o lote para novo registro.
 - Quantidade diferente da prevista exige motivo; "Outros" exige descrição.
 - Big Bag: a quantidade prevista já vem preenchida para confirmar ou corrigir. Sacaria: o operador
   digita a quantidade.

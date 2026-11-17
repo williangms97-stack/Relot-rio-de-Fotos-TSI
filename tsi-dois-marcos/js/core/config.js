@@ -7,11 +7,11 @@
   var TSI = global.TSI = global.TSI || {};
 
   TSI.config = {
-    VERSAO: '1.1.1',
+    VERSAO: '1.2.0',
     NOME_SISTEMA: 'Relatório Fotográfico de TSI',
     EMPRESA: 'Dois Marcos Sementes',
 
-    BANCO: { NOME: 'tsi-dois-marcos', VERSAO: 1 },
+    BANCO: { NOME: 'tsi-dois-marcos', VERSAO: 2 },
 
     PERFIS: { ADM: 'ADM', OPERADOR: 'OPERADOR' },
     ROTULO_PERFIL: { ADM: 'Administrador', OPERADOR: 'Operador' },

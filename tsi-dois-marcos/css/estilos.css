@@ -905,6 +905,19 @@ a.indicador-nota { color: var(--verde-700); font-weight: 600; }
 .imp-obs { min-width: 220px; font-size: 13px; }
 .imp-obs span { display: block; }
 .imp-historico .secao-titulo { margin-top: 6px; }
+.imp-explica .secao-titulo { margin: 0 0 8px; }
+.imp-explica ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--tinta-2); }
+.imp-arquivos { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.imp-arquivo { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--linha); border-radius: var(--raio); background: var(--superficie-2); min-width: 0; }
+.imp-arquivo-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.imp-arquivo-topo > span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.imp-arquivo-topo strong { overflow-wrap: anywhere; }
+.imp-culturas { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.imp-arquivo-cultura { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: var(--raio-p); background: var(--alerta-fundo); font-size: 13.5px; }
+.imp-arquivo-cultura > span { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.imp-aviso { color: var(--alerta); display: flex; gap: 4px; align-items: flex-start; }
+.imp-cultura-linha { min-width: 130px; padding: 4px 6px; font-size: 13px; }
+.imp-sem-cultura { border-color: var(--alerta); background: var(--alerta-fundo); }
 
 /* ==========================================================================
    Telas estreitas
@@ -973,3 +986,9 @@ a.indicador-nota { color: var(--verde-700); font-weight: 600; }
 @media print {
   .adm-menu, .adm-topo, .op-barra, .avisos { display: none !important; }
 }
+
+/* Operador: escolha do lote quando a pesquisa encontra mais de um (versão 1.2) */
+.op-lotes { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.op-lotes-titulo { margin: 0; font-size: 15px; }
+.op-lote-feito { opacity: 0.72; }
+.op-ordem-topo .op-ordem-lote { margin-top: 6px; font-size: 17px !important; font-weight: 700 !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--tinta) !important; }

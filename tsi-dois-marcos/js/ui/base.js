@@ -286,6 +286,7 @@
     return [
       ['Data da solicitação', f('data')],
       ['Lote', f('lote')],
+      ['Cultura', o.cultura || 'Não identificada'],
       ['Cultivar', f('cultivar')],
       ['Categoria', f('categoria')],
       ['Peneira', f('peneira')],
@@ -303,7 +304,7 @@
   ui.paresDoRegistro = function (r) {
     const o = r.ordem || {};
     return [
-      ['Ordem de tratamento', r.ordemTsi],
+      ['Ordem de tratamento', TSI.ordens.numeroOrdem(r)],
       ['Lote', o.lote],
       ['Cultivar', o.cultivar],
       ['Tratamento', o.tratamento],

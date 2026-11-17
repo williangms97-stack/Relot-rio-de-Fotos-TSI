@@ -10,7 +10,7 @@
 
   /* Estruturas independentes. Para evoluir o esquema, aumente BANCO.VERSAO e
      acrescente um bloco "if (versaoAnterior < N)" — nunca altere blocos antigos. */
-  function migrar(db, versaoAnterior) {
+  function migrar(db, versaoAnterior, tx) {
     function criar(nome, opcoes, indices) {
       var s = db.createObjectStore(nome, opcoes);
       (indices || []).forEach(function (i) { s.createIndex(i[0], i[1], i[2] || {}); });
@@ -37,6 +37,45 @@
       // Registro em andamento do operador (sobrevive ao fechamento do navegador)
       criar('rascunhos', { keyPath: 'usuarioId' });
     }
+    if (versaoAnterior < 2) {
+      // Versão 1.2: cada linha do RQ70 (lote) passa a ter a própria chave ("ordem|LOTE" ou
+      // "SEM|LOTE|data"), porque uma ordem pode ter mais de um lote e há lotes sem ordem.
+      // Ordens e ordens inativas são recriadas com a nova chave; registros e rascunhos ganham "chaveOrdem".
+      var montar = function (o) { return TSI.ordens.montarChave(o); };
+      tx.objectStore('ordens').getAll().onsuccess = function (e1) {
+        var ordens = e1.target.result || [], porNumero = {};
+        ordens.forEach(function (o) { o.chave = o.chave || montar(o); porNumero[o.ordemTsi] = o.chave; });
+        tx.objectStore('ordens_inativas').getAll().onsuccess = function (e2) {
+          var inativas = e2.target.result || [];
+          db.deleteObjectStore('ordens');
+          db.deleteObjectStore('ordens_inativas');
+          criar('ordens', { keyPath: 'chave' }, [['lote', 'lote'], ['cultivar', 'cultivar'], ['ordemTsi', 'ordemTsi']]);
+          criar('ordens_inativas', { keyPath: 'chave' });
+          var so = tx.objectStore('ordens'), si = tx.objectStore('ordens_inativas');
+          ordens.forEach(function (o) { if (o.chave) so.put(o); });
+          inativas.forEach(function (i) { i.chave = i.chave || porNumero[i.ordemTsi] || ''; if (i.chave) si.put(i); });
+
+          var sr = tx.objectStore('registros');
+          if (!sr.indexNames.contains('chaveOrdem')) sr.createIndex('chaveOrdem', 'chaveOrdem');
+          sr.getAll().onsuccess = function (e3) {
+            (e3.target.result || []).forEach(function (r) {
+              if (r.chaveOrdem) return;
+              r.chaveOrdem = porNumero[r.ordemTsi] || montar({ ordemTsi: r.ordemTsi, lote: r.ordem && r.ordem.lote });
+              if (r.chaveOrdemAtiva === r.ordemTsi) r.chaveOrdemAtiva = r.chaveOrdem;
+              sr.put(r);
+            });
+          };
+          var sz = tx.objectStore('rascunhos');
+          sz.getAll().onsuccess = function (e4) {
+            (e4.target.result || []).forEach(function (z) {
+              if (z.chaveOrdem || !z.ordemTsi) return;
+              z.chaveOrdem = porNumero[z.ordemTsi] || '';
+              sz.put(z);
+            });
+          };
+        };
+      };
+    }
   }
 
   function abrir() {
@@ -45,7 +84,7 @@
       if (!global.indexedDB) { reject(new Error('Este navegador não oferece armazenamento local (IndexedDB).')); return; }
       var req;
       try { req = global.indexedDB.open(cfg.NOME, cfg.VERSAO); } catch (e) { reject(e); return; }
-      req.onupgradeneeded = function (ev) { migrar(req.result, ev.oldVersion); };
+      req.onupgradeneeded = function (ev) { migrar(req.result, ev.oldVersion, req.transaction); };
       req.onsuccess = function () {
         var db = req.result;
         db.onversionchange = function () { db.close(); promessa = null; };

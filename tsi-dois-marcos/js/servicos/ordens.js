@@ -1,7 +1,13 @@
 /* ==========================================================================
    Ordens de tratamento (base importada do RQ70)
-   A ordem de TSI (coluna U) é a chave de controle da demanda.
-   A ordem de reembalagem (coluna T) é apenas informativa e nunca é usada como chave.
+   Cada linha do RQ70 é um LOTE a fotografar, identificado pela "chave":
+   - com ordem de TSI (coluna U):  "<ordem>|<LOTE>"   (uma ordem pode ter mais de um lote);
+   - sem ordem de TSI:             "SEM|<LOTE>|<data da solicitação>"
+     (o mesmo lote pode ser tratado mais de uma vez sem ordem; se o mesmo lote aparece
+     mais de uma vez na mesma data, a 2ª linha ganha "#2", a 3ª "#3"…).
+   A chave nunca muda depois de criada; se a ordem for informada depois, ela é
+   gravada em "ordemTsi" e a chave continua a mesma.
+   A ordem de reembalagem (coluna T) é apenas informativa.
    ========================================================================== */
 (function (global) {
   'use strict';
@@ -50,6 +56,38 @@
     return s.toUpperCase();
   }
 
+  /** Número de ordem válido: só algarismos (traço, "N/A" etc. contam como sem ordem). */
+  function ordemValida(v) {
+    var n = normalizarNumero(v);
+    return /^\d+$/.test(n) ? n : '';
+  }
+
+  /** Lote sem espaços e em maiúsculas (base da chave e da pesquisa). */
+  function normalizarLote(v) {
+    var s = v === null || v === undefined ? '' : String(v).replace(/\s+/g, '').toUpperCase();
+    return /^([-–—.]*|N\/?A|N\/?D)$/.test(s) ? '' : s;   // "-", "N/A" etc. = sem lote
+  }
+
+  /** Chave de identificação de uma linha do RQ70 (ver o topo do arquivo). */
+  function montarChave(o) {
+    var ordem = ordemValida(o.ordemTsi), lote = normalizarLote(o.lote);
+    if (ordem) return ordem + '|' + lote;
+    if (!lote) return '';
+    return 'SEM|' + lote + '|' + (o.data || o.dataTexto || '');
+  }
+  function chaveDe(o) { return (o && o.chave) || (o ? montarChave(o) : ''); }
+
+  /** Número da ordem para exibir: o número ou "Sem ordem". */
+  function numeroOrdem(x) { return (x && x.ordemTsi) || 'Sem ordem'; }
+
+  /** Identificação curta para títulos: "Ordem 5339 · Lote DM24AA4005" ou "Lote VV26JN0523 (sem ordem)". */
+  function rotulo(x, o) {
+    o = o || (x && x.ordem && typeof x.ordem === 'object' ? x.ordem : x) || {};
+    var lote = o.lote || (x && x.lote) || '';
+    if (x && x.ordemTsi) return 'Ordem ' + x.ordemTsi + (lote ? ' · Lote ' + lote : '');
+    return 'Lote ' + (lote || '—') + ' (sem ordem)';
+  }
+
   /** Classe da embalagem a partir do texto da coluna N: SACARIA, BIG_BAG ou OUTRA. */
   function classificarEmbalagem(texto) {
     var t = util.chave(texto);
@@ -92,23 +130,32 @@
     return util.fmtNum(n, 2) + ' ' + (n === 1 ? u.singular : u.plural);
   }
 
-  /** Junta ordens, situação vigente e registro ativo em uma única visão. */
+  /** Junta ordens, situação vigente e registro ativo em uma única visão (um item por lote). */
   function visao() {
     return Promise.all([repo().ordens.listar(), repo().ordensInativas.listar(), repo().registros.listar()]).then(function (r) {
       var inativas = {}, registros = {};
-      r[1].forEach(function (i) { inativas[i.ordemTsi] = i; });
-      r[2].forEach(function (reg) { if (!reg.anulado) registros[reg.ordemTsi] = reg; });
-      return r[0].map(function (o) {
-        var reg = registros[o.ordemTsi] || null, inat = inativas[o.ordemTsi] || null;
-        return { ordem: o, registro: reg, inativacao: inat, situacao: reg ? SIT.REGISTRADA : inat ? inat.situacao : SIT.PENDENTE };
-      }).sort(function (a, b) { return util.compararNatural(b.ordem.ordemTsi, a.ordem.ordemTsi); });
+      r[1].forEach(function (i) { inativas[chaveDe(i)] = i; });
+      r[2].forEach(function (reg) {
+        if (!reg.anulado && !/^(conflito|substituido):/.test(reg.chaveOrdemAtiva || '')) registros[reg.chaveOrdem || reg.chaveOrdemAtiva] = reg;
+      });
+      return r[0].map(function (o) { return item(o, registros[chaveDe(o)], inativas[chaveDe(o)]); })
+        .sort(function (a, b) {
+          return util.compararNatural(b.ordem.ordemTsi || '', a.ordem.ordemTsi || '') ||
+            String(b.ordem.data || '').localeCompare(String(a.ordem.data || '')) || util.compararNatural(a.ordem.lote || '', b.ordem.lote || '');
+        });
     });
   }
 
-  /** Indicadores do painel. Canceladas e desconsideradas ficam fora da cobertura. */
+  function item(o, reg, inat) {
+    reg = reg || null; inat = inat || null;
+    return { chave: chaveDe(o), ordem: o, registro: reg, inativacao: inat, situacao: reg ? SIT.REGISTRADA : inat ? inat.situacao : SIT.PENDENTE };
+  }
+
+  /** Indicadores do painel (contados por lote). Canceladas e desconsideradas ficam fora da cobertura. */
   function indicadores(itens) {
-    var c = { importadas: itens.length, registradas: 0, pendentes: 0, canceladas: 0, desconsideradas: 0 };
+    var c = { importadas: itens.length, registradas: 0, pendentes: 0, canceladas: 0, desconsideradas: 0, semOrdem: 0 };
     itens.forEach(function (i) {
+      if (!i.ordem.ordemTsi) c.semOrdem++;
       if (i.situacao === SIT.REGISTRADA) c.registradas++;
       else if (i.situacao === SIT.CANCELADA) c.canceladas++;
       else if (i.situacao === SIT.DESCONSIDERADA) c.desconsideradas++;
@@ -119,40 +166,55 @@
     return c;
   }
 
-  /** Pesquisa feita pelo operador: devolve a ordem e o que impede (ou não) o registro. */
-  function consultar(numeroDigitado) {
-    var numero = normalizarNumero(numeroDigitado);
-    if (!numero) return Promise.resolve({ numero: '', ordem: null });
+  /** Situação de um lote pela chave (rascunho, registro). */
+  function consultarChave(chave) {
+    if (!chave) return Promise.resolve(null);
     return Promise.all([
-      repo().ordens.obter(numero),
-      repo().ordensInativas.obter(numero),
-      repo().registros.umPorIndice('chaveOrdemAtiva', numero)
-    ]).then(function (r) {
-      var o = r[0] || null;
-      return {
-        numero: numero, ordem: o, registro: o ? (r[2] || null) : null, inativacao: o ? (r[1] || null) : null,
-        situacao: !o ? null : r[2] ? SIT.REGISTRADA : r[1] ? r[1].situacao : SIT.PENDENTE
-      };
+      repo().ordens.obter(chave),
+      repo().ordensInativas.obter(chave),
+      repo().registros.umPorIndice('chaveOrdemAtiva', chave)
+    ]).then(function (r) { return r[0] ? item(r[0], r[2], r[1]) : null; });
+  }
+
+  /** Pesquisa do operador pelo número da ordem OU pelo lote.
+      Devolve todos os lotes encontrados: uma ordem pode ter mais de um lote, e um lote sem
+      ordem pode ter sido solicitado mais de uma vez. */
+  function consultar(texto) {
+    var busca = util.limpar(texto), ordem = ordemValida(busca), lote = normalizarLote(busca);
+    if (!busca) return Promise.resolve({ busca: '', itens: [] });
+    return repo().ordens.listar().then(function (todas) {
+      var achadas = todas.filter(function (o) {
+        return (ordem && o.ordemTsi === ordem) || (lote && normalizarLote(o.lote) === lote);
+      });
+      return Promise.all(achadas.map(function (o) { return consultarChave(chaveDe(o)); }));
+    }).then(function (itens) {
+      itens = itens.filter(Boolean).sort(function (a, b) {
+        var pa = a.situacao === SIT.PENDENTE ? 0 : 1, pb = b.situacao === SIT.PENDENTE ? 0 : 1;
+        return (pa - pb) || String(b.ordem.data || '').localeCompare(String(a.ordem.data || '')) ||
+          util.compararNatural(a.ordem.lote || '', b.ordem.lote || '');
+      });
+      return { busca: busca, itens: itens };
     });
   }
 
-  /** Cancela ou desconsidera ordens (somente ADM, motivo obrigatório). */
-  function inativar(numeros, tipo, motivo) {
+  /** Cancela ou desconsidera lotes (somente ADM, motivo obrigatório). "chaves" = chaves dos lotes. */
+  function inativar(chaves, tipo, motivo) {
     var adm = TSI.auth.exigirAdm();
     if (tipo !== SIT.CANCELADA && tipo !== SIT.DESCONSIDERADA) throw Erro('Situação inválida.');
     var m = util.limpar(motivo);
     if (m.length < 5) throw Erro('Informe o motivo (mínimo de 5 caracteres).');
     return visao().then(function (itens) {
       var mapa = {}, ops = [], evs = [], ignoradas = [], agora = util.agora();
-      itens.forEach(function (i) { mapa[i.ordem.ordemTsi] = i; });
-      numeros.forEach(function (n) {
-        var i = mapa[n];
-        if (!i) { ignoradas.push({ numero: n, motivo: 'Ordem não encontrada.' }); return; }
-        if (i.situacao === SIT.REGISTRADA) { ignoradas.push({ numero: n, motivo: 'Já possui registro fotográfico. Anule o registro antes.' }); return; }
-        if (i.situacao === tipo) { ignoradas.push({ numero: n, motivo: 'Já está nesta situação.' }); return; }
+      itens.forEach(function (i) { mapa[i.chave] = i; });
+      chaves.forEach(function (k) {
+        var i = mapa[k];
+        if (!i) { ignoradas.push({ chave: k, motivo: 'Ordem não encontrada.' }); return; }
+        if (i.situacao === SIT.REGISTRADA) { ignoradas.push({ chave: k, motivo: 'Já possui registro fotográfico. Anule o registro antes.' }); return; }
+        if (i.situacao === tipo) { ignoradas.push({ chave: k, motivo: 'Já está nesta situação.' }); return; }
         ops.push({ colecao: 'ordensInativas', tipo: 'salvar', valor: {
-          ordemTsi: n, situacao: tipo, motivo: m, usuarioId: adm.id, usuarioNome: adm.nome, dataHora: agora } });
-        evs.push(H().evento({ entidade: 'ordem', entidadeId: n, rotulo: 'Ordem ' + n, dataHora: agora,
+          chave: k, ordemTsi: i.ordem.ordemTsi || null, lote: i.ordem.lote || null,
+          situacao: tipo, motivo: m, usuarioId: adm.id, usuarioNome: adm.nome, dataHora: agora } });
+        evs.push(H().evento({ entidade: 'ordem', entidadeId: k, rotulo: rotulo(i.ordem), dataHora: agora,
           acao: tipo === SIT.CANCELADA ? 'cancelamento' : 'desconsideracao', campo: 'Situação',
           valorAnterior: cfg.ROTULO_SITUACAO_ORDEM[i.situacao], valorNovo: cfg.ROTULO_SITUACAO_ORDEM[tipo], motivo: m }));
       });
@@ -163,18 +225,18 @@
     });
   }
 
-  /** Devolve ordens canceladas/desconsideradas à situação "Pendente", mantendo o histórico. */
-  function reverter(numeros, motivo) {
+  /** Devolve lotes cancelados/desconsiderados à situação "Pendente", mantendo o histórico. */
+  function reverter(chaves, motivo) {
     TSI.auth.exigirAdm();
     var m = util.limpar(motivo);
     return repo().ordensInativas.listar().then(function (lista) {
       var mapa = {}, ops = [], evs = [], agora = util.agora();
-      lista.forEach(function (i) { mapa[i.ordemTsi] = i; });
-      numeros.forEach(function (n) {
-        var i = mapa[n];
+      lista.forEach(function (i) { mapa[chaveDe(i)] = i; });
+      chaves.forEach(function (k) {
+        var i = mapa[k];
         if (!i) return;
-        ops.push({ colecao: 'ordensInativas', tipo: 'remover', chave: n });
-        evs.push(H().evento({ entidade: 'ordem', entidadeId: n, rotulo: 'Ordem ' + n, dataHora: agora, acao: 'reversao', campo: 'Situação',
+        ops.push({ colecao: 'ordensInativas', tipo: 'remover', chave: k });
+        evs.push(H().evento({ entidade: 'ordem', entidadeId: k, rotulo: rotulo(i), dataHora: agora, acao: 'reversao', campo: 'Situação',
           valorAnterior: cfg.ROTULO_SITUACAO_ORDEM[i.situacao], valorNovo: cfg.ROTULO_SITUACAO_ORDEM[SIT.PENDENTE], motivo: m || null }));
       });
       return repo().lote(ops.concat(H().operacoes(evs))).then(function () {
@@ -184,11 +246,29 @@
     });
   }
 
+  /** Histórico de um lote: eventos pela chave e, para ordens importadas antes da versão 1.2, pelo número da ordem. */
+  function historicoDe(o) {
+    var chave = chaveDe(o);
+    var buscas = [TSI.historico.daEntidade('ordem', chave)];
+    if (o.ordemTsi && o.ordemTsi !== chave) buscas.push(TSI.historico.daEntidade('ordem', o.ordemTsi));
+    return Promise.all(buscas).then(function (r) {
+      var vistos = {}, todos = [];
+      [].concat.apply([], r).forEach(function (e) { if (!vistos[e.id]) { vistos[e.id] = true; todos.push(e); } });
+      return todos.sort(function (a, b) { return a.dataHora < b.dataHora ? 1 : a.dataHora > b.dataHora ? -1 : 0; });
+    });
+  }
+
   TSI.ordens = {
     CAMPOS: CAMPOS,
     CAMPO: CAMPO,
     ROTULO_CLASSE: ROTULO_CLASSE,
     normalizarNumero: normalizarNumero,
+    ordemValida: ordemValida,
+    normalizarLote: normalizarLote,
+    montarChave: montarChave,
+    chaveDe: chaveDe,
+    numeroOrdem: numeroOrdem,
+    rotulo: rotulo,
     classificarEmbalagem: classificarEmbalagem,
     unidade: unidade,
     qtdPrevista: qtdPrevista,
@@ -197,7 +277,9 @@
     visao: visao,
     indicadores: indicadores,
     consultar: consultar,
-    obter: function (numero) { return repo().ordens.obter(normalizarNumero(numero)); },
+    consultarChave: consultarChave,
+    historicoDe: historicoDe,
+    obter: function (chave) { return repo().ordens.obter(chave); },
     contar: function () { return repo().ordens.contar(); },
     inativar: inativar,
     reverter: reverter

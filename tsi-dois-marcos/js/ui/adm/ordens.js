@@ -9,9 +9,9 @@
   const { ui, util, config: cfg } = TSI;
   const { html, icone } = ui;
   const SIT = cfg.SITUACAO_ORDEM;
-  const SEM_CULTURA = 'Não informada';
+  const SEM_CULTURA = 'Não identificada';
 
-  const F = { aba: '', busca: '', de: '', ate: '', cultura: '', cultivar: '' };
+  const F = { aba: '', busca: '', de: '', ate: '', cultura: '', cultivar: '', temOrdem: '' };
   let pagina = 1;
 
   TSI.telas.adm.ordens = {
@@ -32,7 +32,7 @@
         return TSI.ordens.visao().then((v) => {
           if (!montado) return;
           visao = v;
-          Array.from(selecao).forEach((n) => { if (!visao.some((i) => i.ordem.ordemTsi === n)) selecao.delete(n); });
+          Array.from(selecao).forEach((n) => { if (!visao.some((i) => i.chave === n)) selecao.delete(n); });
           desenhar();
         }).catch(ui.erro);
       }
@@ -44,7 +44,8 @@
           if (F.ate && (!o.data || o.data > F.ate)) return false;
           if (F.cultura && (o.cultura || SEM_CULTURA) !== F.cultura) return false;
           if (F.cultivar && o.cultivar !== F.cultivar) return false;
-          if (F.busca && !util.contem([o.ordemTsi, o.lote, o.cultivar, o.tratamento].join(' '), F.busca)) return false;
+          if (F.temOrdem === 'nao' && o.ordemTsi) return false;
+          if (F.busca && !util.contem([o.ordemTsi, o.lote, o.cultivar, o.tratamento, o.cultura].join(' '), F.busca)) return false;
           return true;
         });
       }
@@ -60,13 +61,15 @@
           <div class="abas" role="tablist" aria-label="Situação das ordens" id="ordens-abas"></div>
           <section class="filtros" aria-label="Filtros das ordens">
             <div class="campo campo-largo"><label for="ordens-busca">Pesquisar</label>
-              <input type="search" id="ordens-busca" value="${F.busca}" placeholder="Ordem, lote, cultivar ou tratamento" autocomplete="off"></div>
+              <input type="search" id="ordens-busca" value="${F.busca}" placeholder="Ordem, lote, cultivar, cultura ou tratamento" autocomplete="off"></div>
             <div class="campo"><label for="ordens-de">Solicitada de</label><input type="date" id="ordens-de" value="${F.de}"></div>
             <div class="campo"><label for="ordens-ate">até</label><input type="date" id="ordens-ate" value="${F.ate}"></div>
             <div class="campo"><label for="ordens-cultura">Cultura</label>
               <select id="ordens-cultura">${ui.opcoes(util.unicos(visao.map((i) => i.ordem.cultura || SEM_CULTURA)), F.cultura, 'Todas')}</select></div>
             <div class="campo"><label for="ordens-cultivar">Cultivar</label>
               <select id="ordens-cultivar">${ui.opcoes(util.unicos(visao.map((i) => i.ordem.cultivar)), F.cultivar, 'Todas')}</select></div>
+            <div class="campo"><label for="ordens-temOrdem">Ordem de TSI</label>
+              <select id="ordens-temOrdem">${ui.opcoes([{ valor: 'nao', rotulo: 'Só lotes sem ordem' }], F.temOrdem, 'Todos os lotes')}</select></div>
             <button type="button" class="btn btn-fantasma" data-acao="limpar-filtros">Limpar filtros</button>
           </section>
           <div class="barra-selecao" id="ordens-selecao" hidden></div>
@@ -89,22 +92,23 @@
         }
         const pg = ui.paginar(lista, pagina);
         pagina = pg.pagina;
-        const todasDaPagina = pg.itens.every((i) => selecao.has(i.ordem.ordemTsi));
+        const todasDaPagina = pg.itens.every((i) => selecao.has(i.chave));
         alvo.innerHTML = html`
           <div class="cartao cartao-tabela">
             <div class="tabela-rolagem">
               <table class="tabela">
                 <thead><tr>
                   <th class="col-marca"><input type="checkbox" id="ordens-marcar-pagina" aria-label="Selecionar as ordens desta página" ${todasDaPagina ? ui.bruto('checked') : ''}></th>
-                  <th>Ordem de TSI</th><th>Solicitação</th><th>Lote</th><th>Cultivar</th><th>Tratamento</th><th>Embalagem</th><th class="num">Qtd. prevista</th><th>Situação</th>
+                  <th>Ordem de TSI</th><th>Solicitação</th><th>Lote</th><th>Cultura</th><th>Cultivar</th><th>Tratamento</th><th>Embalagem</th><th class="num">Qtd. prevista</th><th>Situação</th>
                 </tr></thead>
                 <tbody>
                   ${pg.itens.map((i) => { const o = i.ordem; return html`
-                    <tr class="linha-clicavel" data-ordem="${o.ordemTsi}" tabindex="0" aria-label="Abrir ordem ${o.ordemTsi}">
-                      <td class="col-marca"><input type="checkbox" id="ordens-marcar-${o.ordemTsi}" data-marcar="${o.ordemTsi}" aria-label="Selecionar ordem ${o.ordemTsi}" ${selecao.has(o.ordemTsi) ? ui.bruto('checked') : ''}></td>
-                      <td><strong>${o.ordemTsi}</strong></td>
+                    <tr class="linha-clicavel" data-ordem="${i.chave}" tabindex="0" aria-label="Abrir ${TSI.ordens.rotulo(o)}">
+                      <td class="col-marca"><input type="checkbox" data-marcar="${i.chave}" aria-label="Selecionar ${TSI.ordens.rotulo(o)}" ${selecao.has(i.chave) ? ui.bruto('checked') : ''}></td>
+                      <td>${o.ordemTsi ? html`<strong>${o.ordemTsi}</strong>` : ui.seloSimples('Sem ordem', 'selo-pendente')}</td>
                       <td class="nowrap">${TSI.ordens.fmtCampo(o, 'data')}</td>
-                      <td>${o.lote || '—'}</td>
+                      <td class="nowrap">${o.lote || '—'}</td>
+                      <td>${o.cultura || SEM_CULTURA}</td>
                       <td>${o.cultivar || '—'}</td>
                       <td>${o.tratamento || '—'}</td>
                       <td>${TSI.ordens.ROTULO_CLASSE[o.classeEmbalagem] || '—'}</td>
@@ -124,7 +128,7 @@
         if (!barra) return;
         barra.hidden = selecao.size === 0;
         if (!selecao.size) { barra.innerHTML = ''; return; }
-        const faltam = lista.filter((i) => !selecao.has(i.ordem.ordemTsi)).length;
+        const faltam = lista.filter((i) => !selecao.has(i.chave)).length;
         barra.innerHTML = html`
           <strong>${util.plural(selecao.size, 'ordem selecionada', 'ordens selecionadas')}</strong>
           ${faltam ? html`<button type="button" class="btn btn-fantasma btn-p" data-acao="marcar-filtro">Selecionar todas as ${util.fmtNum(lista.length, 0)} do filtro</button>` : ''}
@@ -136,12 +140,17 @@
           </span>`;
       }
 
+      function rotuloDe(chave) {
+        const i = visao.filter((x) => x.chave === chave)[0];
+        return i ? TSI.ordens.rotulo(i.ordem) : chave;
+      }
+
       /* ---------- Ações ---------- */
       function inativar(numeros, tipo, aoConcluir) {
         const verbo = tipo === SIT.CANCELADA ? 'Cancelar' : 'Desconsiderar';
         const um = numeros.length === 1;
         ui.confirmar({
-          titulo: verbo + (um ? ' a ordem ' + numeros[0] + '?' : ' ' + util.fmtNum(numeros.length, 0) + ' ordens?'),
+          titulo: verbo + (um ? ' ' + rotuloDe(numeros[0]) + '?' : ' ' + util.fmtNum(numeros.length, 0) + ' lotes?'),
           mensagem: tipo === SIT.CANCELADA
             ? 'Use o cancelamento quando o tratamento não será realizado. A ordem sai da cobertura fotográfica e deixa de aceitar registro.'
             : 'Use quando a ordem não deve ser cobrada por fotografia (por exemplo, tratada antes da implantação do sistema). Ela sai da cobertura fotográfica.',
@@ -160,10 +169,10 @@
         }).catch(ui.erro);
       }
       function reverter(numeros, aoConcluir) {
-        const alvo = numeros.filter((n) => visao.some((i) => i.ordem.ordemTsi === n && i.inativacao));
+        const alvo = numeros.filter((n) => visao.some((i) => i.chave === n && i.inativacao));
         if (!alvo.length) { ui.aviso('Nenhuma das ordens selecionadas está cancelada ou desconsiderada.', 'alerta'); return; }
         ui.confirmar({
-          titulo: alvo.length === 1 ? 'Reverter a ordem ' + alvo[0] + ' para pendente?' : 'Reverter ' + util.fmtNum(alvo.length, 0) + ' ordens para pendente?',
+          titulo: alvo.length === 1 ? 'Reverter ' + rotuloDe(alvo[0]) + ' para pendente?' : 'Reverter ' + util.fmtNum(alvo.length, 0) + ' ordens para pendente?',
           mensagem: 'A ordem volta a contar na cobertura fotográfica e a aceitar registro. O cancelamento anterior continua no histórico.',
           rotuloConfirmar: 'Reverter', motivo: { rotulo: 'Motivo da reversão', obrigatorio: false }
         }).then((resp) => {
@@ -179,7 +188,7 @@
 
       /** Janela com todos os dados do RQ70, a situação, o registro e o histórico da ordem. */
       function abrirOrdem(numero) {
-        const item = visao.filter((i) => i.ordem.ordemTsi === numero)[0];
+        const item = visao.filter((i) => i.chave === numero)[0];
         if (!item) return;
         const o = item.ordem, f = (c) => TSI.ordens.fmtCampo(o, c), reg = item.registro, inat = item.inativacao;
         const acoes = [];
@@ -192,10 +201,10 @@
           acoes.push({ rotulo: 'Abrir registro fotográfico', classe: 'btn-primario', icone: 'camera', acao: (m) => { m.fechar(); TSI.telas.adm.abrirRegistro(reg.id); } });
         }
         const m = ui.modal({
-          titulo: 'Ordem de TSI ' + numero, largura: 'g', acoes: acoes,
+          titulo: TSI.ordens.rotulo(item.ordem), largura: 'g', acoes: acoes,
           conteudo: html`
             <div class="ordem-detalhe">
-              <div class="ordem-detalhe-topo">${ui.seloOrdem(item.situacao)}<span class="texto-menor">${o.cultura ? 'Cultura: ' + o.cultura : 'Cultura não informada na importação'}</span></div>
+              <div class="ordem-detalhe-topo">${ui.seloOrdem(item.situacao)}<span class="texto-menor">${o.cultura ? 'Cultura: ' + o.cultura : 'Cultura não identificada na importação'}</span></div>
               ${inat ? html`<div class="alerta alerta-neutro">${icone('anular', 20)}<div>
                 <strong>${cfg.ROTULO_SITUACAO_ORDEM[inat.situacao]} por ${inat.usuarioNome} em ${util.fmtDataHora(inat.dataHora)}</strong><p>Motivo: ${inat.motivo}</p></div></div>` : ''}
               ${reg ? html`<div class="alerta alerta-ok">${icone('checkCirculo', 20)}<div>
@@ -210,7 +219,7 @@
                 ['Embalagem original', f('embalagemOriginal')], ['Tipo de embalagem solicitada', f('tipoEmbalagem')], ['Tratamento', f('tratamento')]
               ], 'dados-3col')}
               <div class="ordem-blocos">
-                <div><h3 class="secao-titulo">TSI</h3>${ui.dados([['Ordem de TSI', o.ordemTsi], ['Quantidade solicitada (unid.)', f('qtdTsi')], ['Peso por embalagem (kg)', f('pesoEmbTsi')]])}</div>
+                <div><h3 class="secao-titulo">TSI</h3>${ui.dados([['Ordem de TSI', TSI.ordens.numeroOrdem(o)], ['Quantidade solicitada (unid.)', f('qtdTsi')], ['Peso por embalagem (kg)', f('pesoEmbTsi')]])}</div>
                 <div><h3 class="secao-titulo">Reembalagem</h3>${ui.dados([['Ordem de reembalagem', f('ordemReembalagem')], ['Quantidade solicitada (unid.)', f('qtdReembalagem')], ['Peso por embalagem (kg)', f('pesoEmbReembalagem')]])}</div>
               </div>
               ${ui.dados([{ rotulo: 'Observações', valor: f('observacoes'), largo: true }])}
@@ -219,7 +228,7 @@
               <div id="ordem-historico"><p class="texto-menor">Carregando…</p></div>
             </div>`
         });
-        TSI.historico.daEntidade('ordem', numero).then((evs) => {
+        TSI.ordens.historicoDe(o).then((evs) => {
           const alvo = m.corpo.querySelector('#ordem-historico');
           if (alvo) alvo.innerHTML = TSI.telas.adm.eventosHtml(evs);
         }).catch(ui.erro);
@@ -234,8 +243,8 @@
           if (acao === 'ir-importacao') ctx.navegar('importacao');
           else if (acao === 'aba') { F.aba = b.dataset.aba; pagina = 1; desenharLista(); }
           else if (acao === 'pagina') { pagina = Number(b.dataset.pagina); desenharLista(); }
-          else if (acao === 'limpar-filtros') { Object.assign(F, { busca: '', de: '', ate: '', cultura: '', cultivar: '' }); pagina = 1; desenhar(); }
-          else if (acao === 'marcar-filtro') { filtrados().forEach((i) => selecao.add(i.ordem.ordemTsi)); desenharLista(); }
+          else if (acao === 'limpar-filtros') { Object.assign(F, { busca: '', de: '', ate: '', cultura: '', cultivar: '', temOrdem: '' }); pagina = 1; desenhar(); }
+          else if (acao === 'marcar-filtro') { filtrados().forEach((i) => selecao.add(i.chave)); desenharLista(); }
           else if (acao === 'limpar-selecao') { selecao.clear(); desenharLista(); }
           else if (acao === 'lote-desconsiderar') inativar(nums, SIT.DESCONSIDERADA);
           else if (acao === 'lote-cancelar') inativar(nums, SIT.CANCELADA);
@@ -255,12 +264,12 @@
         if (t.dataset.marcar) {
           if (t.checked) selecao.add(t.dataset.marcar); else selecao.delete(t.dataset.marcar);
           const lista = filtrados(), pg = ui.paginar(lista, pagina), cab = el.querySelector('#ordens-marcar-pagina');
-          if (cab) cab.checked = pg.itens.every((i) => selecao.has(i.ordem.ordemTsi));
+          if (cab) cab.checked = pg.itens.every((i) => selecao.has(i.chave));
           desenharSelecao(lista);
           return;
         }
         if (t.id === 'ordens-marcar-pagina') {
-          ui.paginar(filtrados(), pagina).itens.forEach((i) => { if (t.checked) selecao.add(i.ordem.ordemTsi); else selecao.delete(i.ordem.ordemTsi); });
+          ui.paginar(filtrados(), pagina).itens.forEach((i) => { if (t.checked) selecao.add(i.chave); else selecao.delete(i.chave); });
           desenharLista();
           return;
         }

@@ -91,9 +91,9 @@
                 <thead><tr><th>Foto</th><th>Ordem</th><th>Lote</th><th>Cultivar</th><th>Máquina</th><th>Operador</th><th>Data e horário</th><th>Situação</th></tr></thead>
                 <tbody>
                   ${pg.itens.map((r) => { const o = r.ordem || {}; return html`
-                    <tr class="linha-clicavel ${r.anulado ? 'linha-apagada' : ''}" data-id="${r.id}" tabindex="0" aria-label="Abrir registro da ordem ${r.ordemTsi}">
+                    <tr class="linha-clicavel ${r.anulado ? 'linha-apagada' : ''}" data-id="${r.id}" tabindex="0" aria-label="Abrir registro: ${TSI.ordens.rotulo(r)}">
                       <td class="col-foto">${r.miniatura ? html`<img src="${r.miniatura}" alt="Miniatura da fotografia da amostra" loading="lazy">` : ''}</td>
-                      <td><strong>${r.ordemTsi}</strong></td>
+                      <td><strong>${TSI.ordens.numeroOrdem(r)}</strong></td>
                       <td>${o.lote || '—'}</td>
                       <td>${o.cultivar || '—'}</td>
                       <td>${r.maquinaNome}</td>

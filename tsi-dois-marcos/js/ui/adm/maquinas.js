@@ -43,7 +43,7 @@
             <thead><tr><th>Data e horário</th><th>Ordem</th><th>Lote</th><th>Cultivar</th><th>Operador</th><th class="num">Qtd. tratada</th><th>Situação</th></tr></thead>
             <tbody>${regs.map((r) => html`
               <tr class="linha-clicavel ${r.anulado ? 'linha-apagada' : ''}" data-id="${r.id}" tabindex="0">
-                <td class="nowrap">${util.fmtDataHora(r.criadoEm)}</td><td><strong>${r.ordemTsi}</strong></td><td>${(r.ordem || {}).lote || '—'}</td><td>${(r.ordem || {}).cultivar || '—'}</td>
+                <td class="nowrap">${util.fmtDataHora(r.criadoEm)}</td><td><strong>${TSI.ordens.numeroOrdem(r)}</strong></td><td>${(r.ordem || {}).lote || '—'}</td><td>${(r.ordem || {}).cultivar || '—'}</td>
                 <td>${r.operadorNome}</td><td class="num">${util.fmtNum(r.qtdEfetiva, 2)}</td>
                 <td>${r.anulado ? ui.seloSimples('Anulado', 'selo-cancelada', 'anular') : ui.seloEnvio(r.situacaoEnvio)}</td>
               </tr>`)}</tbody>

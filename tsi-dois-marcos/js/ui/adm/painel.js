@@ -9,10 +9,10 @@
   const { ui, util, config: cfg } = TSI;
   const { html, icone } = ui;
   const SIT = cfg.SITUACAO_ORDEM;
-  const SEM_CULTURA = 'Não informada';
+  const SEM_CULTURA = 'Não identificada';
 
   // Filtros e modo de exibição ficam guardados enquanto o painel estiver aberto nesta sessão
-  const F = { periodo: 'tudo', de: '', ate: '', situacao: '', cultura: '', cultivar: '', maquina: '', operador: '', lote: '', ordem: '' };
+  const F = { periodo: 'tudo', de: '', ate: '', situacao: '', cultura: '', cultivar: '', maquina: '', operador: '', lote: '', ordem: '', temOrdem: '' };
   const emTabela = { periodo: false, maquina: false, cultura: false, operador: false };
 
   function meioDia(iso) { const p = iso.split('-'); return new Date(+p[0], +p[1] - 1, +p[2], 12); }
@@ -36,7 +36,9 @@
       if (F.cultura && (o.cultura || SEM_CULTURA) !== F.cultura) return false;
       if (F.cultivar && o.cultivar !== F.cultivar) return false;
       if (F.lote && !util.contem(o.lote || '', F.lote)) return false;
-      if (ordem && o.ordemTsi.indexOf(ordem) < 0) return false;
+      if (ordem && (o.ordemTsi || '').indexOf(ordem) < 0) return false;
+      if (F.temOrdem === 'sim' && !o.ordemTsi) return false;
+      if (F.temOrdem === 'nao' && o.ordemTsi) return false;
       if (F.maquina && (!r || r.maquinaId !== F.maquina)) return false;
       if (F.operador && (!r || r.operadorId !== F.operador)) return false;
       return true;
@@ -139,6 +141,8 @@
             <div class="campo"><label for="painel-operador">Operador</label><select id="painel-operador">${ui.opcoes(opOperadores, F.operador, 'Todos')}</select></div>
             <div class="campo"><label for="painel-lote">Lote</label><input type="search" id="painel-lote" value="${F.lote}" placeholder="Contém…" autocomplete="off"></div>
             <div class="campo"><label for="painel-ordem">Ordem de TSI</label><input type="search" id="painel-ordem" inputmode="numeric" value="${F.ordem}" placeholder="Número" autocomplete="off"></div>
+            <div class="campo"><label for="painel-temOrdem">Ordem de TSI informada</label>
+              <select id="painel-temOrdem">${ui.opcoes([{ valor: 'sim', rotulo: 'Com ordem' }, { valor: 'nao', rotulo: 'Sem ordem de TSI' }], F.temOrdem, 'Todos os lotes')}</select></div>
             <button type="button" class="btn btn-fantasma" data-acao="limpar-filtros">Limpar filtros</button>
           </section>
           <div id="painel-resultado" class="pilha"></div>`;
@@ -155,13 +159,13 @@
             <article class="indicador indicador-destaque">
               <span class="indicador-rotulo">Cobertura fotográfica</span>
               <strong class="indicador-valor" id="kpi-cobertura">${ind.cobertura === null ? '—' : util.fmtPct(ind.cobertura)}</strong>
-              <div class="medidor" role="img" aria-label="${ind.cobertura === null ? 'Sem ordens elegíveis' : 'Cobertura de ' + util.fmtPct(ind.cobertura)}"><span style="--p:${ind.cobertura === null ? 0 : (ind.cobertura / 100).toFixed(4)}"></span></div>
-              <span class="indicador-nota">${util.fmtNum(ind.registradas, 0)} de ${util.plural(ind.elegiveis, 'ordem elegível', 'ordens elegíveis')}</span>
+              <div class="medidor" role="img" aria-label="${ind.cobertura === null ? 'Sem lotes elegíveis' : 'Cobertura de ' + util.fmtPct(ind.cobertura)}"><span style="--p:${ind.cobertura === null ? 0 : (ind.cobertura / 100).toFixed(4)}"></span></div>
+              <span class="indicador-nota">${util.fmtNum(ind.registradas, 0)} de ${util.plural(ind.elegiveis, 'lote elegível', 'lotes elegíveis')}</span>
             </article>
             <article class="indicador">
-              <span class="indicador-rotulo">Ordens importadas</span>
+              <span class="indicador-rotulo">Lotes importados</span>
               <strong class="indicador-valor" id="kpi-importadas">${util.fmtNum(ind.importadas, 0)}</strong>
-              <span class="indicador-nota">${itens.length === visao.length ? 'na base do RQ70' : 'no filtro · ' + util.fmtNum(visao.length, 0) + ' na base'}</span>
+              <span class="indicador-nota">${itens.length === visao.length ? 'na base do RQ70' : 'no filtro · ' + util.fmtNum(visao.length, 0) + ' na base'}${ind.semOrdem ? ' · ' + util.fmtNum(ind.semOrdem, 0) + ' sem ordem de TSI' : ''}</span>
             </article>
             <article class="indicador">
               <span class="indicador-rotulo">Registradas</span>
@@ -171,7 +175,7 @@
             <article class="indicador">
               <span class="indicador-rotulo">Pendentes</span>
               <strong class="indicador-valor" id="kpi-pendentes">${util.fmtNum(ind.pendentes, 0)}</strong>
-              <a class="indicador-nota" href="#ordens" data-acao="ver-pendentes">Ver ordens pendentes</a>
+              <a class="indicador-nota" href="#ordens" data-acao="ver-pendentes">Ver lotes pendentes</a>
             </article>
             <article class="indicador">
               <span class="indicador-rotulo">Canceladas ou desconsideradas</span>
@@ -238,7 +242,7 @@
         else if (acao === 'ir-importacao') ctx.navegar('importacao');
         else if (acao === 'ver-pendentes') { ev.preventDefault(); ctx.navegar('ordens', { situacao: SIT.PENDENTE }); }
         else if (acao === 'limpar-filtros') {
-          Object.assign(F, { periodo: 'tudo', de: '', ate: '', situacao: '', cultura: '', cultivar: '', maquina: '', operador: '', lote: '', ordem: '' });
+          Object.assign(F, { periodo: 'tudo', de: '', ate: '', situacao: '', cultura: '', cultivar: '', maquina: '', operador: '', lote: '', ordem: '', temOrdem: '' });
           desenhar(true);
         } else if (acao === 'alternar-tabela') {
           emTabela[b.dataset.grafico] = !emTabela[b.dataset.grafico];

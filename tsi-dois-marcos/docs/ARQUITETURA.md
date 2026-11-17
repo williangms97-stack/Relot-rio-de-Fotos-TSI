@@ -40,8 +40,8 @@ registro, as fotografias, o item da fila e o evento de auditoria sejam gravados 
 
 | Coleção | Chave | Conteúdo |
 |---|---|---|
-| `ordens` | `ordemTsi` | Linha do RQ70 (22 campos), `cultura`, `classeEmbalagem`, datas de importação |
-| `ordensInativas` | `ordemTsi` | Situação vigente: cancelada ou desconsiderada, motivo, responsável, data |
+| `ordens` | `chave` | Um lote do RQ70 (22 campos), `cultura`, `classeEmbalagem`, datas de importação |
+| `ordensInativas` | `chave` | Situação vigente: cancelada ou desconsiderada, motivo, responsável, data |
 | `importacoes` | `id` | Arquivo, aba, responsável, data, resumo e colunas identificadas |
 | `importacoesLinhas` | `importacaoId` | Todas as linhas lidas naquela importação |
 | `registros` | `id` | Registro fotográfico: cópia dos dados da ordem, quantidades, justificativa, máquina, operador, protocolo, situação de envio, correção e anulação |
@@ -52,8 +52,20 @@ registro, as fotografias, o item da fila e o evento de auditoria sejam gravados 
 | `maquinas` | `id` | Identificação e situação |
 | `rascunhos` | `usuarioId` | Registro em andamento do operador, inclusive fotografias |
 
-Índice único `registros.chaveOrdemAtiva`: vale o número da ordem enquanto o registro é válido e passa
-a `anulado:<id>` quando o ADM anula. É o que impede dois registros válidos para a mesma ordem.
+**Chave do lote (desde a versão 1.2).** Cada linha do RQ70 é um lote a fotografar:
+`"<ordem>|<LOTE>"` quando há ordem de TSI (uma ordem pode ter vários lotes) e `"SEM|<LOTE>|<data>"`
+quando não há (o mesmo lote repetido na mesma data ganha `#2`, `#3`…). A chave nunca muda; quando a
+ordem de um lote sem ordem aparece num RQ novo, ela é gravada em `ordemTsi` e a chave continua a mesma.
+Lote "-" ou vazio conta como sem lote. Regras em `js/servicos/ordens.js` e `js/servicos/importacao.js`.
+O registro guarda `chaveOrdem` (o lote) e `ordemTsi` (só para exibir; pode ser vazio).
+
+Índice único `registros.chaveOrdemAtiva`: vale a chave do lote enquanto o registro é válido e passa
+a `anulado:<id>` quando o ADM anula. É o que impede dois registros válidos para o mesmo lote.
+
+**Cultura.** O RQ70 não tem coluna de cultura: `importacao.js` pontua sinais do conteúdo (tecnologia
+da cultivar I2X/IPRO/VIP3/PRO4…, peneira "P1 5,5" / "C3C" / "P1 P0", embalagem, tratamento). Sem
+vencedor, vale a cultura já aprendida para a mesma cultivar e, depois, a cultura única do arquivo.
+O resto fica "não identificada" para o ADM escolher na pré-visualização.
 
 O registro guarda uma cópia dos dados da ordem no momento do envio. Se a planilha mudar depois, o
 relatório daquele registro não muda.
@@ -100,7 +112,7 @@ chaves e índices (`tsi_registros.chave_ordem_ativa` é única). O navegador nã
 tabelas: só às funções `tsi_*` (security definer), que conferem perfil e situação. Histórico não pode
 ser alterado nem apagado; registros não podem ser apagados (anulação é uma alteração).
 
-Conflito: se dois aparelhos registram a mesma ordem sem internet, o servidor aceita o primeiro;
+Conflito: se dois aparelhos registram o mesmo lote sem internet, o servidor aceita o primeiro;
 o outro fica como "Falha no envio" no aparelho, com `chaveOrdemAtiva = conflito:<id>`, e não é
 reenviado. Registro feito por outro usuário no mesmo aparelho espera esse usuário entrar de novo.
 

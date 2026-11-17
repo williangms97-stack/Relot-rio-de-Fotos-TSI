@@ -33,7 +33,7 @@
 
     novoItem: function (registro, operacao) {
       return {
-        id: util.uuid(), registroId: registro.id, ordemTsi: registro.ordemTsi, protocolo: registro.protocolo,
+        id: util.uuid(), registroId: registro.id, ordemTsi: registro.ordemTsi, rotulo: TSI.ordens.rotulo(registro), protocolo: registro.protocolo,
         operacao: operacao, situacao: ENVIO.AGUARDANDO, criadoEm: util.agora(),
         tentativas: 0, ultimaTentativa: null, erro: null
       };

@@ -1,6 +1,6 @@
 # Contexto do projeto — para continuar o trabalho
 
-Este arquivo resume tudo o que foi decidido e feito até 13/11/2026, para que uma nova
+Este arquivo resume tudo o que foi decidido e feito até 17/11/2026, para que uma nova
 sessão do Claude (ou outra pessoa) continue de onde parou. Leia junto com
 `README.md` e `docs/ARQUITETURA.md`.
 
@@ -44,12 +44,12 @@ em Chrome automatizado (Playwright) com a planilha RQ70 real.
   só em 168 linhas.
 - 6 células com erro do Excel (`#REF!`, `#N/A`) — importadas vazias e apontadas na prévia.
 - O arquivo tem 7,5 MB porque a formatação ocupa 16.383 colunas; a leitura leva alguns segundos.
-- Não existe coluna de cultura: ela é informada na tela de importação.
+- Não existe coluna de cultura (ver "Versão 1.2" abaixo: ela é reconhecida pelo conteúdo).
 - **Nunca versionar a planilha real no repositório** (o `.gitignore` bloqueia `*.xlsx`/`*.xls`).
 
 ### Decisões já tomadas
 
-- Ordem de TSI (coluna U) é a chave; ordem de reembalagem (T) é só informativa.
+- Ordem de TSI (coluna U) + lote identificam a linha (desde a 1.2); ordem de reembalagem (T) é só informativa.
 - Um registro válido por ordem (índice único `registros.chaveOrdemAtiva`). O ADM pode
   **anular** um registro (com motivo); ele continua guardado e a ordem volta a pendente.
 - Divergência de quantidade exige motivo; "Outros" exige descrição. Big Bag: quantidade
@@ -86,6 +86,35 @@ usuário criado no painel do Supabase vira ADM. Cadastro livre deve ficar deslig
 Pendências / ideias: conferir limites do plano (pausa por inatividade, espaço das fotos);
 Realtime para atualização instantânea (hoje: a cada 60 s e no botão Atualizar); tela para o ADM ver
 registros que ficaram em conflito em algum celular.
+
+## Versão 1.2 — vários RQs, cultura pelo conteúdo, lotes (17/11/2026)
+
+Pedido do usuário: há RQs separados por cultura (Soja Demanda Comercial, Soja Multiplicação, Milho,
+Trigo; Sorgo possível), mas **o nome do arquivo não segue padrão** e nem sempre diz a cultura. Ele quer
+anexar vários RQs de uma vez; o sistema compara, acrescenta o novo, ajusta o que mudou e mantém o
+antigo (o RQ costuma repetir as ordens anteriores; o que não vier continua como está).
+
+Decisões (conversadas com o usuário):
+- **Cultura pelo conteúdo** de cada linha, nunca pelo nome do arquivo. Separar soja multiplicação de
+  comercial **não importa**: tudo é "Soja". Não reconhecida = "Não identificada", o ADM escolhe na prévia.
+- **Uma ordem pode ter mais de um lote** (raro; ex.: trigo, ordem 5339 com 2 lotes): cada lote é um
+  registro fotográfico e o operador escolhe o lote no celular.
+- **Lotes sem ordem de TSI também são fotografados** (milho tinha 185 linhas assim; soja multiplicação 4
+  com "TRATAR SEM ORDEM"). O mesmo lote pode ser tratado mais de uma vez sem ordem → chave inclui a data.
+  Quando a ordem aparece num RQ novo, é ligada ao lote existente (a foto já tirada continua valendo).
+- Removido da proposta: listar para cancelar as ordens que "sumiram" do RQ (o RQ pode vir só com as novas).
+
+Verificado nos 4 modelos reais (não versionados): mesmas colunas A–V (em Milho/Trigo K e L trocadas,
+resolvido pelo cabeçalho); aba do milho chama "Solicitação" e há uma 2ª aba auxiliar; nenhuma ordem
+se repete entre culturas; cultura reconhecida em 100% das linhas (Milho 327, Soja 1.355, Trigo 29).
+12 linhas do milho sem ordem **e** sem lote (lote vazio ou "-") não entram — confirmar com o usuário.
+
+Banco: `supabase/02_lotes.sql` (rodar uma vez em quem já tinha o 01) converte ordens, inativas e
+registros para a chave do lote. IndexedDB versão 2 faz o mesmo no aparelho.
+
+Pendências combinadas para a etapa 2: amostra de entrada de semente (formato a confirmar), fotos
+menores (o limite de 1 GB do plano gratuito comporta só ~1.000–1.500 fotos de 2000 px), indicador de
+espaço no painel, tarefa para o Supabase não pausar por inatividade.
 
 ## Como trabalhar neste repositório
 

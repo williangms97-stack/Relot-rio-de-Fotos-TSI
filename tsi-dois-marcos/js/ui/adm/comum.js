@@ -35,7 +35,7 @@
     TSI.maquinas.listar().then((maquinas) => {
       const opcoes = maquinas.filter((m) => m.ativa || m.id === reg.maquinaId).map((m) => ({ valor: m.id, rotulo: m.nome + (m.ativa ? '' : ' (inativa)') }));
       const m = ui.modal({
-        titulo: 'Corrigir registro da ordem ' + reg.ordemTsi, largura: 'm',
+        titulo: 'Corrigir registro: ' + TSI.ordens.rotulo(reg), largura: 'm',
         conteudo: html`
           <form id="form-edicao" class="formulario" novalidate>
             <p class="texto-menor">Quantidade prevista no RQ70: <strong>${TSI.ordens.fmtQtd(reg.qtdPrevista, reg.ordem)}</strong>. Cada campo alterado fica no histórico com o valor anterior e o novo.</p>
@@ -100,7 +100,7 @@
             </div>
             <div class="registro-info">
               <div class="registro-topo">
-                <div><span class="texto-menor">Ordem de tratamento</span><strong>${reg.ordemTsi}</strong></div>
+                <div><span class="texto-menor">Ordem de tratamento</span><strong>${TSI.ordens.numeroOrdem(reg)}</strong></div>
                 <div class="registro-selos">
                   ${reg.anulado ? ui.seloSimples('Anulado', 'selo-cancelada', 'anular') : ui.seloEnvio(reg.situacaoEnvio)}
                   ${reg.divergencia ? ui.seloSimples('Divergência de quantidade', 'selo-pendente', 'alerta') : ''}
@@ -138,12 +138,12 @@
           else if (b.dataset.acao === 'editar') abrirEdicao(reg, carregar);
           else if (b.dataset.acao === 'anular') {
             ui.confirmar({
-              titulo: 'Anular o registro da ordem ' + reg.ordemTsi + '?',
+              titulo: 'Anular o registro de ' + TSI.ordens.rotulo(reg) + '?',
               mensagem: 'O registro e as fotografias continuam guardados e visíveis no histórico, mas deixam de valer. A ordem volta a ficar pendente e poderá receber um novo registro.',
               rotuloConfirmar: 'Anular registro', perigo: true, motivo: { rotulo: 'Motivo da anulação', obrigatorio: true }
             }).then((resp) => {
               if (!resp) return;
-              return TSI.registros.anular(reg.id, resp.motivo).then(() => { ui.aviso('Registro anulado. A ordem ' + reg.ordemTsi + ' voltou a ficar pendente.', 'ok'); return carregar(); });
+              return TSI.registros.anular(reg.id, resp.motivo).then(() => { ui.aviso('Registro anulado. ' + TSI.ordens.rotulo(reg) + ' voltou a ficar pendente.', 'ok'); return carregar(); });
             }).catch(ui.erro);
           }
         };

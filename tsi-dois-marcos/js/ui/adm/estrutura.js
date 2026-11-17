@@ -53,7 +53,7 @@
             <table class="tabela tabela-compacta">
               <thead><tr><th>Ordem</th><th>Operação</th><th>Entrou na fila em</th><th>Situação</th><th class="num">Tentativas</th></tr></thead>
               <tbody>${fila.slice(0, 100).map((i) => html`
-                <tr><td>${i.ordemTsi}</td><td>${i.operacao === 'criar' ? 'Novo registro' : 'Correção ou anulação'}</td><td>${util.fmtDataHora(i.criadoEm)}</td>
+                <tr><td>${i.rotulo || i.ordemTsi}</td><td>${i.operacao === 'criar' ? 'Novo registro' : 'Correção ou anulação'}</td><td>${util.fmtDataHora(i.criadoEm)}</td>
                 <td>${ui.seloEnvio(i.situacao)}${i.erro ? html`<div class="texto-menor">${i.erro}</div>` : ''}</td><td class="num">${i.tentativas}</td></tr>`)}</tbody>
             </table>
           </div>

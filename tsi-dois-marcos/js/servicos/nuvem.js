@@ -261,7 +261,16 @@
   var COLECOES_ADM = ['historico', 'importacoes'];
   var EVENTO = { maquinas: 'maquinas:alterado', ordens: 'ordens:alterado', ordensInativas: 'ordens:alterado', importacoes: 'ordens:alterado',
     registros: 'registros:alterado', fotos: 'registros:alterado', historico: 'registros:alterado' };
-  var CHAVE_LOCAL = { ordens: 'ordemTsi', ordensInativas: 'ordemTsi' };
+
+  /** Documentos gravados antes da versão 1.2 (sem "chave"/"chaveOrdem") recebem a chave do lote. */
+  function completarChaves(colecao, d) {
+    if ((colecao === 'ordens' || colecao === 'ordensInativas') && !d.chave) d.chave = TSI.ordens.montarChave(d);
+    if (colecao === 'registros' && !d.chaveOrdem && d.ordemTsi) {
+      d.chaveOrdem = TSI.ordens.montarChave({ ordemTsi: d.ordemTsi, lote: d.ordem && d.ordem.lote });
+      if (d.chaveOrdemAtiva === d.ordemTsi) d.chaveOrdemAtiva = d.chaveOrdem;
+    }
+    return d;
+  }
 
   function chaveCursor(colecao) { return 'tsi.cursor.' + (auth.ehAdm() ? 'ADM' : 'OP') + '.' + colecao; }
   function lerCursor(c) { try { return JSON.parse(global.localStorage.getItem(chaveCursor(c)) || 'null'); } catch (e) { return null; } }
@@ -276,7 +285,7 @@
   function aplicar(colecao, linhas) {
     if (!linhas.length) return Promise.resolve();
     var removidas = linhas.filter(function (l) { return l.removido; });
-    var vivas = linhas.filter(function (l) { return !l.removido; }).map(function (l) { return l.dados; });
+    var vivas = linhas.filter(function (l) { return !l.removido; }).map(function (l) { return completarChaves(colecao, l.dados); });
     var preparo;
     if (colecao === 'fotos') {
       // mantém os bytes que o aparelho já tem
@@ -295,7 +304,7 @@
             // outro registro deste aparelho ocupa a mesma ordem
             if (ocupante.situacaoEnvio !== cfg.SITUACAO_ENVIO.SINCRONIZADO) {
               extras.push(Object.assign({}, ocupante, { chaveOrdemAtiva: 'conflito:' + ocupante.id, situacaoEnvio: cfg.SITUACAO_ENVIO.FALHA,
-                erroEnvio: 'A ordem ' + r.ordemTsi + ' já foi registrada em outro aparelho por ' + (r.operadorNome || 'outro operador') + '.' }));
+                erroEnvio: TSI.ordens.rotulo(r) + ': já foi registrado em outro aparelho por ' + (r.operadorNome || 'outro operador') + '.' }));
             } else {
               extras.push(Object.assign({}, ocupante, { chaveOrdemAtiva: 'substituido:' + ocupante.id }));
             }
@@ -320,7 +329,7 @@
         var ops = [];
         return Promise.all(fila.filter(function (i) { return i.situacao !== cfg.SITUACAO_ENVIO.SINCRONIZADO; }).map(function (i) {
           return local.registros.obter(i.registroId).then(function (reg) {
-            if (reg && reg.situacaoEnvio === cfg.SITUACAO_ENVIO.FALHA && /^conflito:/.test(reg.chaveOrdemAtiva || '') && falhas.indexOf(reg.ordemTsi) >= 0) {
+            if (reg && reg.situacaoEnvio === cfg.SITUACAO_ENVIO.FALHA && /^conflito:/.test(reg.chaveOrdemAtiva || '') && falhas.indexOf(reg.chaveOrdem) >= 0) {
               ops.push({ colecao: 'filaSincronizacao', tipo: 'salvar', valor: Object.assign({}, i, { situacao: cfg.SITUACAO_ENVIO.FALHA, erro: reg.erroEnvio }) });
             }
           });
@@ -436,8 +445,8 @@
 
   /* antes de comparar a planilha, traz a base atualizada do servidor */
   var analisarLocal = TSI.importacao.analisar;
-  TSI.importacao.analisar = function (leitura, cultura) {
-    return sincronia.puxar().then(function () { return analisarLocal(leitura, cultura); });
+  TSI.importacao.analisar = function (leituras, escolhas) {
+    return sincronia.puxar().then(function () { return analisarLocal(leituras, escolhas); });
   };
 
   TSI.nuvem = {
