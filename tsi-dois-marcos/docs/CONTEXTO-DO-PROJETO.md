@@ -125,8 +125,10 @@ registros para a chave do lote. IndexedDB versão 2 faz o mesmo no aparelho.
   projeto gratuito não pausar após 7 dias sem uso. O GitHub desliga tarefas agendadas de repositórios
   sem nenhum commit por 60 dias.
 
-Amostra de entrada de semente (ainda não feita): planilha no mesmo padrão do RQ70; fotografada pelo
-Controle de Qualidade; identificação pelo produtor, que não está no RQ70 e não é essencial. Em todas as
+Amostra de entrada de semente: planilha no mesmo padrão do RQ70, geralmente com ordem de TSI;
+fotografada pelo Controle de Qualidade; identificação pelo produtor não é essencial. Decidido com o
+usuário em 18/11/2026: **não precisa de nada novo** — importa como um RQ qualquer, não aparece separada
+nos relatórios e segue o mesmo fluxo no celular (inclusive a quantidade). Em todas as
 culturas quem fotografa é o Controle de Qualidade (os "operadores" do app).
 
 ## Como trabalhar neste repositório
