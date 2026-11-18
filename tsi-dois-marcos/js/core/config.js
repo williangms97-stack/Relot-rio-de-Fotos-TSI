@@ -7,7 +7,7 @@
   var TSI = global.TSI = global.TSI || {};
 
   TSI.config = {
-    VERSAO: '1.2.0',
+    VERSAO: '1.3.0',
     NOME_SISTEMA: 'Relatório Fotográfico de TSI',
     EMPRESA: 'Dois Marcos Sementes',
 
@@ -62,8 +62,8 @@
 
     /* Fotografia da amostra */
     FOTO: {
-      LADO_MAXIMO: 2000,          // px do maior lado da imagem armazenada
-      QUALIDADE: 0.86,            // JPEG
+      LADO_MAXIMO: 1600,          // px do maior lado da imagem armazenada (1.3: era 2000; ~350 KB por foto)
+      QUALIDADE: 0.8,             // JPEG
       MIN_LADO_MAIOR: 800,        // resolução mínima aceita
       MIN_LADO_MENOR: 600,
       MINIATURA: 360,             // px do maior lado da miniatura
@@ -84,6 +84,9 @@
     },
 
     ITENS_POR_PAGINA: 50,
+
+    /* Limites do plano gratuito do Supabase (indicador de espaço no painel) */
+    LIMITES_PLANO: { BANCO_MB: 500, FOTOS_MB: 1024, AVISO: 0.8 },
 
     /* Bibliotecas pesadas, carregadas só quando são usadas (o celular do operador
        não precisa baixar o leitor de Excel para abrir o app). */

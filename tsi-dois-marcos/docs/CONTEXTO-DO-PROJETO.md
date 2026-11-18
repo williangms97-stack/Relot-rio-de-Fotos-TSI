@@ -115,9 +115,19 @@ Implantação da 1.2 em 18/11/2026: `02_lotes.sql` rodado no Supabase e RQs impo
 Banco: `supabase/02_lotes.sql` (rodar uma vez em quem já tinha o 01) converte ordens, inativas e
 registros para a chave do lote. IndexedDB versão 2 faz o mesmo no aparelho.
 
-Pendências combinadas para a etapa 2: amostra de entrada de semente (formato a confirmar), fotos
-menores (o limite de 1 GB do plano gratuito comporta só ~1.000–1.500 fotos de 2000 px), indicador de
-espaço no painel, tarefa para o Supabase não pausar por inatividade.
+## Versão 1.3 — espaço e Supabase sempre ativo (18/11/2026)
+
+- Fotos salvas com até 1600 px e qualidade JPEG 0,8 (antes 2000 px / 0,86): ~350 KB por foto, o
+  espaço de 1 GB do plano gratuito dura o dobro ou mais. Fotos antigas não mudam.
+- Painel mostra "Espaço usado no servidor" (banco 500 MB, fotos 1 GB, aviso a partir de 80%).
+  Precisa de `supabase/03_espaco.sql` (função `tsi_uso`, só ADM); sem ele, o quadro não aparece.
+- `.github/workflows/manter-supabase-ativo.yml` chama `tsi_ping` (também do 03) a cada 3 dias, para o
+  projeto gratuito não pausar após 7 dias sem uso. O GitHub desliga tarefas agendadas de repositórios
+  sem nenhum commit por 60 dias.
+
+Amostra de entrada de semente (ainda não feita): planilha no mesmo padrão do RQ70; fotografada pelo
+Controle de Qualidade; identificação pelo produtor, que não está no RQ70 e não é essencial. Em todas as
+culturas quem fotografa é o Controle de Qualidade (os "operadores" do app).
 
 ## Como trabalhar neste repositório
 

@@ -992,3 +992,12 @@ a.indicador-nota { color: var(--verde-700); font-weight: 600; }
 .op-lotes-titulo { margin: 0; font-size: 15px; }
 .op-lote-feito { opacity: 0.72; }
 .op-ordem-topo .op-ordem-lote { margin-top: 6px; font-size: 17px !important; font-weight: 700 !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--tinta) !important; }
+
+/* Painel: espaço usado no servidor (versão 1.3) */
+.espaco { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.espaco h2 { font: 600 18px/1.2 var(--fonte-titulo); }
+.espaco-itens { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.espaco-item { display: flex; flex-direction: column; gap: 2px; }
+.espaco-item strong { font-size: 20px; }
+.espaco-item small { font-size: 13px; font-weight: 500; color: var(--tinta-3); }
+.espaco-alto .medidor span { background: var(--alerta); }

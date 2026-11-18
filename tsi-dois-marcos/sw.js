@@ -8,7 +8,7 @@
 
    Ao publicar uma nova versão, altere VERSAO para forçar a renovação completa.
    ========================================================================== */
-const VERSAO = 'tsi-dois-marcos-1.2.0';
+const VERSAO = 'tsi-dois-marcos-1.3.0';
 
 const ARQUIVOS = [
   './',

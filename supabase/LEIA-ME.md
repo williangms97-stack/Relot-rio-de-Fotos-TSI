@@ -9,6 +9,7 @@ Arquivos desta pasta:
 |---|---|
 | `01_estrutura.sql` | Tabelas, regras de acesso, funções e o local das fotografias (instalação nova) |
 | `02_lotes.sql` | Atualização da versão 1.2: cada linha do RQ70 passa a ser identificada pelo lote. Só para quem instalou o `01` antes de 17/11/2026 |
+| `03_espaco.sql` | Versão 1.3: indicador de espaço usado no painel e sinal de vida para o projeto não ser pausado. Rodar uma vez (instalação nova também) |
 | `functions/tsi-usuarios/index.ts` | Função que cria usuários e redefine senhas a partir do painel |
 
 ## 1. Fechar o cadastro livre

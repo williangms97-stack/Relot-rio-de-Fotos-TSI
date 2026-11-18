@@ -94,8 +94,36 @@
             <button type="button" class="btn btn-secundario" data-acao="atualizar">${icone('atualizar', 18)}<span>Atualizar</span></button>
           </div>
         </header>
-        <div id="painel-corpo" class="pilha"><p class="texto-menor">Carregando…</p></div>`;
+        <div id="painel-corpo" class="pilha"><p class="texto-menor">Carregando…</p></div>
+        <div id="painel-espaco"></div>`;
       const corpo = el.querySelector('#painel-corpo');
+
+      /** Espaço usado no Supabase (plano gratuito). Some sem aviso se o 03_espaco.sql ainda não foi rodado. */
+      function carregarEspaco() {
+        const alvo = el.querySelector('#painel-espaco');
+        if (!TSI.nuvem || !TSI.nuvem.ativa || !TSI.nuvem.online()) { alvo.innerHTML = ''; return; }
+        TSI.nuvem.rpc('tsi_uso').then((u) => {
+          if (!montado || !u) return;
+          const lim = cfg.LIMITES_PLANO, mb = 1048576;
+          const itens = [
+            { rotulo: 'Banco de dados', usado: u.bancoBytes, limite: lim.BANCO_MB * mb, nota: 'ordens, registros e histórico' },
+            { rotulo: 'Fotografias', usado: u.fotosBytes, limite: lim.FOTOS_MB * mb, nota: util.plural(u.fotosArquivos || 0, 'arquivo', 'arquivos') }
+          ];
+          const alerta = itens.some((i) => i.usado / i.limite >= lim.AVISO);
+          alvo.innerHTML = html`
+            <section class="cartao espaco" aria-label="Espaço usado no servidor">
+              <header><h2>Espaço usado no servidor</h2><p class="texto-menor">Plano gratuito do Supabase · medido às ${util.fmtHora()}</p></header>
+              ${alerta ? html`<div class="alerta alerta-alerta">${icone('alerta', 20)}<span>O espaço está passando de ${util.fmtPct(lim.AVISO * 100)}. Fale com o responsável pelo sistema antes que acabe.</span></div>` : ''}
+              <div class="espaco-itens">${itens.map((i) => { const p = Math.min(1, i.usado / i.limite); return html`
+                <div class="espaco-item ${p >= lim.AVISO ? 'espaco-alto' : ''}">
+                  <span class="indicador-rotulo">${i.rotulo}</span>
+                  <strong>${util.fmtBytes(i.usado)} <small>de ${util.fmtBytes(i.limite)} · ${util.fmtPct(p * 100)}</small></strong>
+                  <div class="medidor" role="img" aria-label="${i.rotulo}: ${util.fmtPct(p * 100)} usado"><span style="--p:${p.toFixed(4)}"></span></div>
+                  <span class="texto-menor">${i.nota}</span>
+                </div>`; })}</div>
+            </section>`;
+        }).catch(() => { alvo.innerHTML = ''; });
+      }
 
       function carregar() {
         return Promise.all([TSI.ordens.visao(), TSI.maquinas.listar()]).then((r) => {
@@ -238,7 +266,7 @@
         const b = ev.target.closest('[data-acao]');
         if (!b) return;
         const acao = b.dataset.acao;
-        if (acao === 'atualizar') ui.ocupar(b, () => (TSI.nuvem && TSI.nuvem.ativa ? TSI.nuvem.sincronia.puxar() : Promise.resolve()).then(carregar));
+        if (acao === 'atualizar') ui.ocupar(b, () => (TSI.nuvem && TSI.nuvem.ativa ? TSI.nuvem.sincronia.puxar() : Promise.resolve()).then(carregar).then(carregarEspaco));
         else if (acao === 'ir-importacao') ctx.navegar('importacao');
         else if (acao === 'ver-pendentes') { ev.preventDefault(); ctx.navegar('ordens', { situacao: SIT.PENDENTE }); }
         else if (acao === 'limpar-filtros') {
@@ -265,6 +293,7 @@
       const desligar = [TSI.eventos.ouvir('registros:alterado', carregar), TSI.eventos.ouvir('ordens:alterado', carregar)];
 
       carregar();
+      carregarEspaco();
       return function desmontar() {
         montado = false;
         global.removeEventListener('resize', aoRedimensionar);

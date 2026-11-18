@@ -45,7 +45,7 @@ registro, as fotografias, o item da fila e o evento de auditoria sejam gravados 
 | `importacoes` | `id` | Arquivo, aba, responsável, data, resumo e colunas identificadas |
 | `importacoesLinhas` | `importacaoId` | Todas as linhas lidas naquela importação |
 | `registros` | `id` | Registro fotográfico: cópia dos dados da ordem, quantidades, justificativa, máquina, operador, protocolo, situação de envio, correção e anulação |
-| `fotos` | `id` | Imagem JPEG (até 2000 px), miniatura, dimensões, data da captura e resultado da verificação |
+| `fotos` | `id` | Imagem JPEG (até 1600 px desde a 1.3; antes 2000 px), miniatura, dimensões, data da captura e resultado da verificação |
 | `historico` | `id` | Eventos de auditoria (nunca alterados nem apagados) |
 | `filaSincronizacao` | `id` | Itens a enviar ao servidor: operação, situação, tentativas, erro |
 | `usuarios` | `id` | Nome, usuário, perfil, situação, senha (hash com sal — demonstrativo) |
