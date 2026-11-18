@@ -15,6 +15,18 @@
 -- ---------------------------------------------------------------------------
 -- 1. Ordens: a chave passa a ser a do lote
 -- ---------------------------------------------------------------------------
+-- linhas importadas antes da 1.2 com "-" (ou outro texto) no lugar da ordem: viram lote sem ordem
+-- (a ordem "-" é apagada mais abaixo, depois da troca da chave da tabela)
+update public.tsi_ordens
+   set dados = dados || jsonb_build_object(
+         'ordemOriginal', dados ->> 'ordemTsi',
+         'chave', 'SEM|' ||
+           (case when upper(regexp_replace(coalesce(dados ->> 'lote', ''), '\s', '', 'g')) ~ '^[-–—.]*$' then ''
+                 else upper(regexp_replace(coalesce(dados ->> 'lote', ''), '\s', '', 'g')) end)
+           || '|' || coalesce(dados ->> 'data', dados ->> 'dataTexto', ''))
+ where coalesce(dados ->> 'chave', '') = ''
+   and coalesce(dados ->> 'ordemTsi', '') !~ '^[0-9]+$';
+
 update public.tsi_ordens
    set dados = dados || jsonb_build_object('chave',
          (dados ->> 'ordemTsi') || '|' || upper(regexp_replace(coalesce(dados ->> 'lote', ''), '\s', '', 'g')))
@@ -84,6 +96,17 @@ update public.tsi_registros
                             (dados ->> 'ordemTsi') || '|' || upper(regexp_replace(coalesce(dados -> 'ordem' ->> 'lote', ''), '\s', '', 'g')))
                      else '{}'::jsonb end
  where coalesce(dados ->> 'chaveOrdem', '') = '' and coalesce(dados ->> 'ordemTsi', '') <> '';
+
+-- ordem "-" (ou outro texto) das linhas importadas antes da 1.2: fica vazia (lote sem ordem)
+update public.tsi_ordens
+   set dados = dados || jsonb_build_object('ordemTsi', null)
+ where dados ? 'ordemOriginal' and dados ->> 'ordemTsi' = dados ->> 'ordemOriginal';
+update public.tsi_ordens_inativas
+   set dados = dados || jsonb_build_object('ordemTsi', null)
+ where dados ->> 'chave' like 'SEM|%' and coalesce(dados ->> 'ordemTsi', '') <> '';
+update public.tsi_registros
+   set dados = dados || jsonb_build_object('ordemTsi', null)
+ where dados ->> 'chaveOrdem' like 'SEM|%' and coalesce(dados ->> 'ordemTsi', '') <> '';
 
 -- ---------------------------------------------------------------------------
 -- 4. Funções atualizadas (iguais às do 01_estrutura.sql)
