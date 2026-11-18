@@ -107,7 +107,10 @@ Decisões (conversadas com o usuário):
 Verificado nos 4 modelos reais (não versionados): mesmas colunas A–V (em Milho/Trigo K e L trocadas,
 resolvido pelo cabeçalho); aba do milho chama "Solicitação" e há uma 2ª aba auxiliar; nenhuma ordem
 se repete entre culturas; cultura reconhecida em 100% das linhas (Milho 327, Soja 1.355, Trigo 29).
-12 linhas do milho sem ordem **e** sem lote (lote vazio ou "-") não entram — confirmar com o usuário.
+12 linhas do milho sem ordem **e** sem lote (lote vazio ou "-") não entram. O usuário confirmou em
+18/11/2026 que, por enquanto, essas linhas não precisam de foto.
+
+Implantação da 1.2 em 18/11/2026: `02_lotes.sql` rodado no Supabase e RQs importados com sucesso.
 
 Banco: `supabase/02_lotes.sql` (rodar uma vez em quem já tinha o 01) converte ordens, inativas e
 registros para a chave do lote. IndexedDB versão 2 faz o mesmo no aparelho.
